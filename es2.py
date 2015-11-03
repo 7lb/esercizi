@@ -22,11 +22,12 @@ def printUsage():
     """
     print "Usage: %s path" % sys.argv[0]
 
-if __name__ == "__main__":
-    if (len(sys.argv) < 2):
-        printUsage()
-        exit()
-    path = sys.argv[1]
+def concat(path):
+    """
+    Concatena il contenuto di tutti i file presenti nel path
+    
+    Ritorna il testo concatenato
+    """
     txt  = ''
     # Ciclo per concatenare il contenuto dei file di log
     # Qui si va a supporre che nel path siano presenti *solo* i file che ci
@@ -37,18 +38,24 @@ if __name__ == "__main__":
         inf  = open(path + f, "r")
         txt += inf.read()
         inf.close()
+    return txt
+
+def makeTupList(txt, formatStr):
+    """
+    Crea una lista di tuple di tipo (datetime, str) a partire da una lista di
+    stringhe di testo formattate secondo la regola "dataora,messaggio" e una
+    stringa di formato per parsare data e ora
+    
+    Ritorna la lista di tuple
+    """
     # Questa list comprehension crea una lista di tuple.
     # Ogni tupla ha due elementi: la data del messaggio di log in prima
     # posizione e il mesasggio stesso in seconda posizione.
-    # Le singole linee di testo sono ottenute splittando il contenuto dei due
-    # file ai caratteri di newline; siccome i file stessi terminano con un
-    # carattere di newline l'ultimo elemento anziché essere una linea di testo
-    # sarà una stringa vuota, quindi evito di considerarla con lo splice [:-1]
     # La list comprehension conterrà in output solo le stringe di testo che
     # contengono la sottostringa "Error", in modo tale da isolare gli errori
     logs =  [
             tuple(line.split(",", 1))
-            for line in txt.split('\n')[:-1]
+            for line in txt
             if "Error" in line
             ]
     # Siccome le tuple sono immutabili si genera una nuova lista di tuple,
@@ -56,9 +63,22 @@ if __name__ == "__main__":
     # creato parsando la data e l'ora secondo il formato dei file di log;
     # il secondo elemento delle tuple viene lasciato invariato
     logs =  [
-            (datetime.datetime.strptime(l[0], "%Y-%m-%d %H:%M:%S"), l[1])
-            for l in logs
+            (datetime.datetime.strptime(log[0], formatStr), log[1])
+            for log in logs
             ]
+    return logs
+
+if __name__ == "__main__":
+    if (len(sys.argv) < 2):
+        printUsage()
+        exit()
+    path = sys.argv[1]
+    txt = concat(path)
+    # Le singole linee di testo sono ottenute splittando il contenuto dei due
+    # file ai caratteri di newline; siccome i file stessi terminano con un
+    # carattere di newline l'ultimo elemento anziché essere una linea di testo
+    # sarà una stringa vuota, quindi evito di considerarla con lo splice [:-1]
+    logs = makeTupList(txt.split('\n')[:-1], "%Y-%m-%d %H:%M:%S")
     # La funzione sort viene automaticamente applicata al primo elemento di una
     # lista di tuple, quindi si ordina per data. Si vogliono i risultati a
     # partire dal più recente, quindi si inverte l'ordine di ordinamento
