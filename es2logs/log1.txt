@@ -1,0 +1,6 @@
+2015-03-10 12:00:15,3 Config loaded
+2015-03-10 12:00:15,4 Try to establish connection
+2015-03-10 12:00:15,8 Error: Unable to load images
+2015-03-10 12:00:18,1 Connection established
+2015-03-10 12:00:18,1 No new messages
+2015-03-10 12:00:18,2 Read from socket: ""
