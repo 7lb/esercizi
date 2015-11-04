@@ -12,8 +12,6 @@
 # la linea di testo è un errore solo allora aggiungerlo al testo salvato in
 # memoria
 
-# TODO: splittare le linee in 3 parti tenendo in considerazione il numero
-#           centrale (livello di importanza del messaggio di log?)
 # TODO: leggere solo i file di log (os.path.splitext)
 # TODO: leggere i file ricorsivamente nella directory (os.walk)
 
@@ -40,29 +38,30 @@ def concat(path):
 
 def makeTupList(txt, formatStr):
     """
-    Crea una lista di tuple di tipo (datetime, str) a partire da una lista di
-    stringhe di testo formattate secondo la regola "dataora,messaggio" e una
+    Crea una lista di tuple di tipo (datetime, lvl, str) a partire da una lista
+    di stringhe di testo formattate secondo "dataora,livello messaggio" e una
     stringa di formato per parsare data e ora
 
     Ritorna la lista di tuple
     """
-    # Questa list comprehension crea una lista di tuple.
-    # Ogni tupla ha due elementi: la data del messaggio di log in prima
-    # posizione e il mesasggio stesso in seconda posizione.
+    logs = []
+    # Ogni tupla ha tre elementi: la data del messaggio di log in prima
+    # posizione, il livello di importanza del mesasggio in seconda posizione e
+    # il messaggio stesso in terza posizione.
     # La list comprehension conterrà in output solo le stringe di testo che
-    # contengono la sottostringa "Error", in modo tale da isolare gli errori
-
-    logs =  [
-            tuple(line.split(",", 1))
-            for line in txt
-            if "Error" in line
-            ]
+    # cominciano la sottostringa "Error", in modo tale da isolare gli errori
+    for line in txt:
+        tmp             = line.split(",", 1)
+        date_str        = tmp[0]
+        msg_lvl, msg    = tmp[1].split(" ", 1)
+        if msg.startswith("Error"):
+            logs.append(tuple([date_str, msg_lvl, msg]))
     # Siccome le tuple sono immutabili si genera una nuova lista di tuple,
     # questa volta aventi come primo elemento un oggetto datetime che viene
     # creato parsando la data e l'ora secondo il formato dei file di log;
     # il secondo elemento delle tuple viene lasciato invariato
     logs =  [
-            (datetime.datetime.strptime(log[0], formatStr), log[1])
+            (datetime.datetime.strptime(log[0], formatStr), log[1], log[2])
             for log in logs
             ]
     return logs
@@ -84,4 +83,4 @@ if __name__ == "__main__":
     logs.sort(reverse=True)
     # Infine si stampa il risultato
     for l in logs:
-        print l[0], l[1]
+        print l[0], l[1], l[2]
