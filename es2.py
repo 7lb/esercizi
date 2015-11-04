@@ -12,27 +12,30 @@
 # la linea di testo è un errore solo allora aggiungerlo al testo salvato in
 # memoria
 
-# TODO: leggere solo i file di log (os.path.splitext)
-# TODO: leggere i file ricorsivamente nella directory (os.walk)
-
 import argparse
 import datetime
 import os
 
-def concat(path):
+def concat(path, ext_list=["txt"]):
     """
     Concatena il contenuto di tutti i file presenti nel path
 
     Ritorna il testo concatenato
     """
-    txt  = ''
+    txt         = ''
+    log_files   = []
     # Ciclo per concatenare il contenuto dei file di log
     # Qui si va a supporre che nel path siano presenti *solo* i file che ci
     # interessano. listdir non lista le directory speciali "." e ".." quindi
     # non dovrebbero esserci problemi per un eventuale walk indesiderato
     # attraverso il filesystem
-    for f in os.listdir(path):
-        with open(path + f, "r") as inf:
+    for root, dirs, files in os.walk(path):
+        for name in files:
+            if (os.path.splitext(name)[1][1:] in ext_list):
+                log_files.append(os.path.join(root, name))
+
+    for f in log_files:
+        with open(f, "r") as inf:
             txt += inf.read()
     return txt
 
@@ -69,9 +72,13 @@ def makeTupList(txt, formatStr):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("path", help="path to log directory")
-    args = parser.parse_args()
-    path = args.path
-    txt = concat(path)
+    parser.add_argument("-e", "--extensions", default="",
+                        help="list of valid estensions for log files")
+    args    = parser.parse_args()
+    path    = args.path
+    txt     = args.extensions                           \
+            and concat(path, args.extensions.split())   \
+            or concat(path)
     # Le singole linee di testo sono ottenute splittando il contenuto dei due
     # file ai caratteri di newline; siccome i file stessi terminano con un
     # carattere di newline l'ultimo elemento anziché essere una linea di testo
