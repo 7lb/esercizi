@@ -12,20 +12,19 @@
 # la linea di testo è un errore solo allora aggiungerlo al testo salvato in
 # memoria
 
+# TODO: splittare le linee in 3 parti tenendo in considerazione il numero
+#           centrale (livello di importanza del messaggio di log?)
+# TODO: leggere solo i file di log (os.path.splitext)
+# TODO: leggere i file ricorsivamente nella directory (os.walk)
+
+import argparse
 import datetime
 import os
-import sys
-
-def printUsage():
-    """
-    Stampa a schermo i parametri del programma
-    """
-    print "Usage: %s path" % sys.argv[0]
 
 def concat(path):
     """
     Concatena il contenuto di tutti i file presenti nel path
-    
+
     Ritorna il testo concatenato
     """
     txt  = ''
@@ -35,9 +34,8 @@ def concat(path):
     # non dovrebbero esserci problemi per un eventuale walk indesiderato
     # attraverso il filesystem
     for f in os.listdir(path):
-        inf  = open(path + f, "r")
-        txt += inf.read()
-        inf.close()
+        with open(path + f, "r") as inf:
+            txt += inf.read()
     return txt
 
 def makeTupList(txt, formatStr):
@@ -45,7 +43,7 @@ def makeTupList(txt, formatStr):
     Crea una lista di tuple di tipo (datetime, str) a partire da una lista di
     stringhe di testo formattate secondo la regola "dataora,messaggio" e una
     stringa di formato per parsare data e ora
-    
+
     Ritorna la lista di tuple
     """
     # Questa list comprehension crea una lista di tuple.
@@ -53,6 +51,7 @@ def makeTupList(txt, formatStr):
     # posizione e il mesasggio stesso in seconda posizione.
     # La list comprehension conterrà in output solo le stringe di testo che
     # contengono la sottostringa "Error", in modo tale da isolare gli errori
+
     logs =  [
             tuple(line.split(",", 1))
             for line in txt
@@ -69,10 +68,10 @@ def makeTupList(txt, formatStr):
     return logs
 
 if __name__ == "__main__":
-    if (len(sys.argv) < 2):
-        printUsage()
-        exit()
-    path = sys.argv[1]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("path", help="path to log directory")
+    args = parser.parse_args()
+    path = args.path
     txt = concat(path)
     # Le singole linee di testo sono ottenute splittando il contenuto dei due
     # file ai caratteri di newline; siccome i file stessi terminano con un
