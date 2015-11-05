@@ -20,7 +20,7 @@ def concat(path, ext_list=["txt"]):
     """
     Concatena il contenuto di tutti i file presenti nel path
 
-    Ritorna il testo concatenato
+    Ritorna una lista di stringhe, ogni stringa è una linea di log
     """
     log_files   = []
     txt         = []
@@ -37,7 +37,7 @@ def concat(path, ext_list=["txt"]):
     for f in log_files:
         with open(f, "r") as inf:
             txt.append(inf.read())
-    return "".join(txt)
+    return "".join(txt).split("\n")[:-1]
 
 def makeTupList(txt, formatStr):
     """
@@ -89,7 +89,7 @@ if __name__ == "__main__":
     # file ai caratteri di newline; siccome i file stessi terminano con un
     # carattere di newline l'ultimo elemento anziché essere una linea di testo
     # sarà una stringa vuota, quindi evito di considerarla con lo splice [:-1]
-    logs = makeTupList(txt.split("\n")[:-1], "%Y-%m-%d %H:%M:%S")
+    logs = makeTupList(txt, "%Y-%m-%d %H:%M:%S")
     logs = sortLogs(logs)
     # Infine si stampa il risultato
     for l in logs:

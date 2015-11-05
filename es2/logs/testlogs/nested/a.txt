@@ -1,0 +1,2 @@
+2015-05-07 12:33:44,8 Error: nested/a.txt
+2010-08-05 15:21:52,0 Not an error
