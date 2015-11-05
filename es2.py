@@ -83,7 +83,7 @@ if __name__ == "__main__":
     # file ai caratteri di newline; siccome i file stessi terminano con un
     # carattere di newline l'ultimo elemento anziché essere una linea di testo
     # sarà una stringa vuota, quindi evito di considerarla con lo splice [:-1]
-    logs = makeTupList(txt.split('\n')[:-1], "%Y-%m-%d %H:%M:%S")
+    logs = makeTupList(txt.split("\n")[:-1], "%Y-%m-%d %H:%M:%S")
     # La funzione sort viene automaticamente applicata al primo elemento di una
     # lista di tuple, quindi si ordina per data. Si vogliono i risultati a
     # partire dal più recente, quindi si inverte l'ordine di ordinamento
