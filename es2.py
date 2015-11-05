@@ -22,8 +22,8 @@ def concat(path, ext_list=["txt"]):
 
     Ritorna il testo concatenato
     """
-    txt         = ''
     log_files   = []
+    txt         = []
     # Ciclo per concatenare il contenuto dei file di log
     # Qui si va a supporre che nel path siano presenti *solo* i file che ci
     # interessano. listdir non lista le directory speciali "." e ".." quindi
@@ -36,8 +36,8 @@ def concat(path, ext_list=["txt"]):
 
     for f in log_files:
         with open(f, "r") as inf:
-            txt += inf.read()
-    return txt
+            txt.append(inf.read())
+    return "".join(txt)
 
 def makeTupList(txt, formatStr):
     """
@@ -64,7 +64,7 @@ def makeTupList(txt, formatStr):
     # creato parsando la data e l'ora secondo il formato dei file di log;
     # il secondo elemento delle tuple viene lasciato invariato
     logs =  [
-            (datetime.datetime.strptime(log[0], formatStr), log[1], log[2])
+            (datetime.datetime.strptime(log[0], formatStr), int(log[1]), log[2])
             for log in logs
             ]
     return logs
