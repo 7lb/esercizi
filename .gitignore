@@ -1,2 +1,4 @@
-# Ignore vim swap files
+# vim swap files
 *.swp
+
+*.pyc
