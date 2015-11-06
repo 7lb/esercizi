@@ -25,7 +25,9 @@ def list_files(path, ext_list=["txt"]):
                 log_files.append(os.path.join(root, name))
     return log_files
 
-def filter_file(f, pattern="^(\d{4}\-\d{2}\-\d{2}\s{1}\d{2}\:\d{2}\:\d{2})\,(\d{1})\s{1}(Error\:.*)"):
+def filter_file(
+        f,
+        pattern="^(\d{4}\-\d{2}\-\d{2}\s{1}\d{2}\:\d{2}\:\d{2})\,(\d{1})\s{1}(Error\:.*)"):
     """
     Filtra il contenuto del file in modo tale da isolare gli errori
 

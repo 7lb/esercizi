@@ -15,49 +15,46 @@ class TestLogParser(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
 
-        cls.log_files = \
-        [
-        "logs/testlogs/a.txt",
-        "logs/testlogs/a.log",
-        "logs/testlogs/nested/a.txt",
-        "logs/testlogs/nested/a.log"
-        ]
-
-        cls.filter_file_0_expected_res = \
-        [
-        (datetime.datetime(2010, 5, 7, 12, 33, 44), 8, 'Error: a.txt'),
-        (datetime.datetime(2010, 5, 7, 12, 33, 45), 8, 'Error: a.txt'),
-        (datetime.datetime(2013, 6, 27, 18, 12, 11), 8, 'Error: a.txt')
-        ]
-
-        cls.concat_expected_res = \
-        [
-        (datetime.datetime(2010, 5, 7, 12, 33, 44), 8, 'Error: a.txt'),
-        (datetime.datetime(2010, 5, 7, 12, 33, 45), 8, 'Error: a.txt'),
-        (datetime.datetime(2013, 6, 27, 18, 12, 11), 8, 'Error: a.txt'),
-        (datetime.datetime(2008, 10, 11, 19, 21, 22), 8, 'Error: a.log'),
-        (datetime.datetime(2009, 1, 10, 11, 0, 1), 8, 'Error: a.log'),
-        (datetime.datetime(2012, 8, 15, 13, 12, 11), 8, 'Error: a.log'),
-        (datetime.datetime(2015, 5, 7, 12, 33, 44), 8, 'Error: nested/a.txt'),
-        (datetime.datetime(2003, 4, 21, 11, 1, 47), 8, 'Error: nested/a.log'),
-        (datetime.datetime(2009, 5, 12, 11, 53, 29), 8, 'Error: nested/a.log')
-        ]
-
-        cls.sortl_expected_res = \
-        [
-        (datetime.datetime(2015, 5, 7, 12, 33, 44), 8, 'Error: nested/a.txt'),
-        (datetime.datetime(2013, 6, 27, 18, 12, 11), 8, 'Error: a.txt'),
-        (datetime.datetime(2012, 8, 15, 13, 12, 11), 8, 'Error: a.log'),
-        (datetime.datetime(2010, 5, 7, 12, 33, 45), 8, 'Error: a.txt'),
-        (datetime.datetime(2010, 5, 7, 12, 33, 44), 8, 'Error: a.txt'),
-        (datetime.datetime(2009, 5, 12, 11, 53, 29), 8, 'Error: nested/a.log'),
-        (datetime.datetime(2009, 1, 10, 11, 0, 1), 8, 'Error: a.log'),
-        (datetime.datetime(2008, 10, 11, 19, 21, 22), 8, 'Error: a.log'),
-        (datetime.datetime(2003, 4, 21, 11, 1, 47), 8, 'Error: nested/a.log')
-        ]
-
-        cls.path       = "logs/testlogs/"
+        cls.current_dir = os.path.dirname(os.path.realpath(__file__))
+        cls.path       = cls.current_dir + "/logs/testlogs/"
         cls.valid_exts = ["txt", "log"]
+
+        cls.log_files = [
+            cls.current_dir + "/logs/testlogs/a.txt",
+            cls.current_dir + "/logs/testlogs/a.log",
+            cls.current_dir + "/logs/testlogs/nested/a.txt",
+            cls.current_dir + "/logs/testlogs/nested/a.log"
+        ]
+
+        cls.filter_file_0_expected_res = [
+            (datetime.datetime(2010, 5, 7, 12, 33, 44), 8, 'Error: a.txt'),
+            (datetime.datetime(2010, 5, 7, 12, 33, 45), 8, 'Error: a.txt'),
+            (datetime.datetime(2013, 6, 27, 18, 12, 11), 8, 'Error: a.txt')
+        ]
+
+        cls.concat_expected_res = [
+            (datetime.datetime(2010, 5, 7, 12, 33, 44), 8, 'Error: a.txt'),
+            (datetime.datetime(2010, 5, 7, 12, 33, 45), 8, 'Error: a.txt'),
+            (datetime.datetime(2013, 6, 27, 18, 12, 11), 8, 'Error: a.txt'),
+            (datetime.datetime(2008, 10, 11, 19, 21, 22), 8, 'Error: a.log'),
+            (datetime.datetime(2009, 1, 10, 11, 0, 1), 8, 'Error: a.log'),
+            (datetime.datetime(2012, 8, 15, 13, 12, 11), 8, 'Error: a.log'),
+            (datetime.datetime(2015, 5, 7, 12, 33, 44), 8, 'Error: nested/a.txt'),
+            (datetime.datetime(2003, 4, 21, 11, 1, 47), 8, 'Error: nested/a.log'),
+            (datetime.datetime(2009, 5, 12, 11, 53, 29), 8, 'Error: nested/a.log')
+        ]
+
+        cls.sortl_expected_res = [
+            (datetime.datetime(2015, 5, 7, 12, 33, 44), 8, 'Error: nested/a.txt'),
+            (datetime.datetime(2013, 6, 27, 18, 12, 11), 8, 'Error: a.txt'),
+            (datetime.datetime(2012, 8, 15, 13, 12, 11), 8, 'Error: a.log'),
+            (datetime.datetime(2010, 5, 7, 12, 33, 45), 8, 'Error: a.txt'),
+            (datetime.datetime(2010, 5, 7, 12, 33, 44), 8, 'Error: a.txt'),
+            (datetime.datetime(2009, 5, 12, 11, 53, 29), 8, 'Error: nested/a.log'),
+            (datetime.datetime(2009, 1, 10, 11, 0, 1), 8, 'Error: a.log'),
+            (datetime.datetime(2008, 10, 11, 19, 21, 22), 8, 'Error: a.log'),
+            (datetime.datetime(2003, 4, 21, 11, 1, 47), 8, 'Error: nested/a.log')
+        ]
 
     def test_list_files(self):
         """
@@ -103,9 +100,9 @@ class TestLogParser(unittest.TestCase):
         tl = es2.concat(self.path, self.valid_exts)
         for t in tl:
             self.assertTrue(len(t) == 3)
-            self.assertTrue(type(t[0]) == datetime.datetime)
-            self.assertTrue(type(t[1]) == int)
-            self.assertTrue(type(t[2]) == str)
+            self.assertTrue(isinstance(t[0], datetime.datetime))
+            self.assertTrue(isinstance(t[1], int))
+            self.assertTrue(isinstance(t[2], basestring))
 
 if __name__ == "__main__":
     unittest.main()
