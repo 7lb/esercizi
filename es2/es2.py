@@ -56,7 +56,8 @@ def concat(path, ext_list=["txt"]):
     log_files = list_files(path, ext_list)
     for f in log_files:
         ff = filter_file(f)
-        logs.extend(ff) if ff else None
+        if ff:
+           logs.extend(ff)
 
     return logs
 
@@ -66,21 +67,29 @@ def sortl(logs):
     # partire dal più recente, quindi si inverte l'ordine di ordinamento
     return sorted(logs, reverse=True)
 
-def printl(logs):
+def printl(logs, human=False):
     """
-    Stampa a schermo il risultato in maniera leggibile
+    Stampa a schermo il risultato
     """
+    print
+    print "data".center(22), "lvl", "messaggio"
     for l in logs:
-        print l[0], l[1], l[2]
+        if human:
+            print l[0].strftime("%a, %x %X").ljust(22), str(l[1]).center(3), l[2]
+        else:
+            print l[0], l[1], l[2]
+    print
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("path", help="path to log directory")
     parser.add_argument("-e", "--extensions", default="",
                         help="comma separated list of valid estensions for log files")
+    parser.add_argument("-r", "--human", action="store_true",
+                        help="prints in human-readable format if specified")
     args = parser.parse_args()
     path = args.path
     logs = concat(path, args.extensions.split(",")) if args.extensions else concat(path)
 
     logs = sortl(logs)
-    printl(logs)
+    printl(logs, args.human)
