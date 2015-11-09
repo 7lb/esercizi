@@ -35,7 +35,7 @@ def main():
     try:
         good_urls, bad_urls = read_urls_from(args.file)
     except IOError:
-        exit(args.file + ": no such file or directory")
+        exit("%s: no such file or directory" % args.file)
 
     if not good_urls:
         exit("No valid urls specified")
