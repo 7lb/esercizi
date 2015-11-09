@@ -159,7 +159,7 @@ def write_xml(file_, xml_data):
         <status>status_code</status>
         <time>elapsed</time>
         <response>JSON response</response>
-    </ur>
+    </url>
 
     dove n è l'ordinale dell'URL testato all'interno del file originale, URL è
     l'url testato, status_code è il codice di stato ritornato dal test, time è
