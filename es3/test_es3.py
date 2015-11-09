@@ -33,19 +33,6 @@ class URLTester(unittest.TestCase):
         """
         self.assertRaises(IOError, es3.read_urls_from, ("BADFILE"))
 
-    def test_test_urls_bad_input(self):
-        """
-        Deve sollevare ConnectionError
-        """
-        self.assertRaises(requests.exceptions.ConnectionError,
-            es3.test_urls, (self.bad_urls))
-
-    def test_test_urls_good_input(self):
-        """
-        Deve ritornare None
-        """
-        self.assertIsNone(es3.test_urls(self.good_urls))
-
     def test_test_url_bad_input(self):
         """
         Deve sollevare ConnectionError

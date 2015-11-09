@@ -10,6 +10,7 @@ import requests
 import time
 import validators
 import sys
+import xml.etree.ElementTree as ET
 
 
 # Costanti globali
@@ -30,7 +31,13 @@ WEIGHT_BOLD = "\033[1m"
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("file", help="file containing the url list to test")
+    parser.add_argument("-x", "--xml",
+                        help="xml output location")
+    parser.add_argument("-s", "--silent", action="store_true",
+                        help="suppress stdout output")
     args = parser.parse_args()
+
+    xml_data = []
 
     try:
         good_urls, bad_urls = read_urls_from(args.file)
@@ -40,11 +47,23 @@ def main():
     if not good_urls:
         exit("No valid urls specified")
 
-    test_urls(good_urls)
+    for url_tup in good_urls:
+        url = url_tup[2]
+        if not args.silent:
+            sys.stdout.write("Testing {0}...\r".format(url))
+            sys.stdout.flush()
+        req, elapsed = test_url(url)
+        if args.xml:
+            xml_data.append(make_xml_tuple(url_tup, req, elapsed))
+        if not args.silent:
+            print_url(url, req, elapsed)
 
     if bad_urls:
         log_urls(bad_urls)
         print 'There are rejected urls. See "rejected_urls.txt" for a list'
+
+    if args.xml:
+        write_xml(args.xml, xml_data)
 
 
 def read_urls_from(file_):
@@ -67,18 +86,6 @@ def read_urls_from(file_):
             else:
                 bad_urls.append((i, False, url.strip()))
     return (good_urls, bad_urls)
-
-
-def test_urls(url_tuples):
-    """
-    Testa la lista di url uno alla volta stampando a schermo il risultato.
-    """
-    for url_tup in url_tuples:
-        url = url_tup[2]
-        sys.stdout.write("Testing {0}...\r".format(url))
-        sys.stdout.flush()
-        req, elapsed = test_url(url)
-        print_url(url, req, elapsed)
 
 
 def test_url(url):
@@ -142,9 +149,53 @@ def log_body(url, req, file_="failed_responses.txt"):
             return
         fd.write("%s: %s\n" % (url, r))
 
+
+def write_xml(file_, xml_data):
+    """
+    Scrive sul file xml specificato il risultato del test. Ogni url ha la
+    seguente struttura xml:
+
+    <url num="n" value="URL">
+        <status>status_code</status>
+        <time>elapsed</time>
+        <response>JSON response</response>
+    </ur>
+
+    dove n è l'ordinale dell'URL testato all'interno del file originale, URL è
+    l'url testato, status_code è il codice di stato ritornato dal test, time è
+    il tempo che è stato necessario alla richiesta e response è il contenuto in
+    JSON dela risposta, se presente
+    """
+    root = ET.Element("urls")
+    for elem in xml_data:
+        url = ET.SubElement(root, "url")
+        url.set("num", str(elem[0]))
+        url.set("value", elem[2])
+        status = ET.SubElement(url, "status")
+        status.text = str(elem[3])
+        time = ET.SubElement(url, "time")
+        time.text = str(elem[4])
+        response = ET.SubElement(url, "response")
+        response.text = str(elem[5])
+    tree = ET.ElementTree(root)
+    tree.write(file_)
+
 # TODO: elementtree (output xml)
 # TODO: mock
 
+
+def make_xml_tuple(url_tup, req, elapsed):
+    """
+    Costruisce una tupla con tutti i dati necessari per l'output xml
+    """
+    json_content = ""
+    try:
+        json_content = req.json()
+    except ValueError:
+        pass
+    xml_data = list(url_tup)
+    xml_data.extend([req.status_code, elapsed, json_content])
+    return xml_data
 
 if __name__ == "__main__":
     main()
