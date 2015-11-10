@@ -1,8 +1,8 @@
-http://www.google.com/
-http://www.yahoo.com/
-http://pippo/
-non valido
-https://github.com/7lb/badreq
-https://api.github.com/events
-http://www.microsoft.net/
-http://www.microsoft.com/
+http://www.google.com/,1
+http://www.yahoo.com/,0.5
+http://pippo/,5
+non valido,5
+https://github.com/7lb/badreq,5
+https://api.github.com/events,5
+http://www.microsoft.net/,5
+http://www.microsoft.com/,5

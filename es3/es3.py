@@ -32,37 +32,40 @@ PROGRAM_DIR = os.path.dirname(os.path.realpath(__file__))
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("file", help="file containing the url list to test")
+    parser.add_argument("file", type=argparse.FileType("r"),
+            help="file containing the url list to test")
     parser.add_argument("-x", "--xml",
                         help="xml output location")
-    parser.add_argument("-s", "--silent", action="store_true",
-                        help="suppress stdout output")
     args = parser.parse_args()
 
     xml_data = []
+    bad_urls = []
+    good_urls = []
 
-    try:
-        good_urls, bad_urls = read_urls_from(args.file)
-    except IOError:
-        exit("%s: no such file or directory" % args.file)
+    #url_data è una tupla (url, timeout)
+    for url_data, is_valid in read_urls_from(args.file):
+        if is_valid:
+            good_urls.append(url_data)
+        else:
+            bad_urls.append(url_data)
 
     if not good_urls:
         exit("No valid urls specified")
 
-    for url_tup in good_urls:
-        url = url_tup[1]
-        if not args.silent:
-            sys.stdout.write("Testing {0}...\r".format(url))
+    for url_data in good_urls:
+        if not args.xml:
+            sys.stdout.write("Testing {0}...\r".format(url_data[0]))
             sys.stdout.flush()
-        req, elapsed = test_url(url)
+        resp, elapsed = test_url(url_data[0])
         if args.xml:
-            xml_data.append(make_xml_tuple(url_tup, req, elapsed))
-        if not args.silent:
-            print_url(url, req, elapsed)
+            xml_data.append(make_xml_tuple(url_data, resp, elapsed))
+        if not args.xml:
+            print_url(url_data, resp, elapsed)
 
     if bad_urls:
         log_urls(bad_urls)
-        print 'There are rejected urls. See "rejected_urls.txt" for a list'
+        if not args.xml:
+            print 'There are rejected urls. See "rejected_urls.txt" for a list'
 
     if args.xml:
         write_xml(args.xml, xml_data)
@@ -78,27 +81,24 @@ def read_urls_from(file_):
 
     La prima lista è quella degli url validi, la seconda di quelli invalidi
     """
-    good_urls = []
-    bad_urls = []
-    with open(file_, "r") as urls_file:
-        for i, url in enumerate(urls_file):
-            if validators.url(url):
-                good_urls.append((i, url.strip()))
-            else:
-                bad_urls.append((i, url.strip()))
-    return (good_urls, bad_urls)
+    for url_descriptor in file_:
+        url, timeout = map(str.strip, url_descriptor.split(","))
+        try:
+            is_valid = validators.url(url)
+        except validators.ValidationFailure:
+            is_valid = False
+        yield (url, float(timeout)), is_valid
 
 
 def test_url(url):
     """
     Testa un singolo url (si suppone sia valido, il filtro è eseguito a monte)
 
-    Ritorna l'oggetto request se ha successo, False se fallisce, e il tempo
-    impiegato per eseguire la richiesta
+    Ritorna l'oggetto request e il tempo impiegato per eseguire la richiesta
     """
     start = time.time()
-    req = requests.get(url)
-    return (req, time.time() - start)
+    resp = requests.get(url)
+    return (resp, time.time() - start)
 
 
 def log_urls(urls, file_=os.path.join(PROGRAM_DIR, "rejected_urls.txt")):
@@ -107,49 +107,43 @@ def log_urls(urls, file_=os.path.join(PROGRAM_DIR, "rejected_urls.txt")):
     da validators.url
     """
     # Estrae gli url dalla lista di tuple (numero_url, url)
-    urls = [ "%s%s" % (tup[1], "\n") for tup in urls ]
+    urls = [ "{0}\n".format(url_data[0]) for url_data in urls ]
     with open(file_, "w") as fd:
         fd.writelines(urls)
 
 
-def print_url(url, req, elapsed):
+def print_url(url_data, resp, elapsed):
     """
     Stampa a video url, risultato della richiesta (con formattazione dei
     colori) e tempo necessario per eseguire la richiesta. Inoltre logga ragione
     e body della richiesta se il server risponde con un codice delle famiglie
     4xx o 5xx.
     """
-    print url,
-    if req.status_code in OK_STATUS_LIST:
-        print_status(req, COLOR_SUCCESS)
-    elif req.status_code in ERROR_STATUS_LIST:
-        print_status(req, COLOR_FAILURE)
-        log_body(url, req)
-    print "{0} {1:.2f}s".format("time taken: ", elapsed)
+
+    formatted_string = "{0} {1:.2f}s {2} {3:.2f}s".format(
+            "time taken: ", elapsed, "timeout: ", url_data[1])
+    response_timed_out = elapsed > url_data[1]
+    print url_data[0],
+    try:
+        resp.raise_for_status()
+        if response_timed_out:
+            print_status(resp, COLOR_FAILURE)
+        else:
+            print_status(resp, COLOR_SUCCESS)
+    except requests.exceptions.HTTPError:
+        print_status(resp, COLOR_FAILURE)
+    print formatted_string
 
 
-def print_status(req, color):
+def print_status(resp, color):
     """
     Stampa a video lo status_code e la reason della richiesta, nel colore
     specificato
     """
     print color + "{0}: {1}".format(
-            WEIGHT_BOLD + str(req.status_code) + WEIGHT_NORMAL,
-            req.reason) \
+            WEIGHT_BOLD + str(resp.status_code) + WEIGHT_NORMAL,
+            resp.reason) \
     + COLOR_RESET,
-
-
-def log_body(url, req, file_=os.path.join(PROGRAM_DIR, "failed_responses.txt")):
-    """
-    Scrive sul file specificato la risposta ricevuta dall'url, solo se è in
-    JSON
-    """
-    with open(file_, "w") as fd:
-        try:
-            r = req.json()
-        except ValueError:
-            return
-        fd.write("%s: %s\n" % (url, r))
 
 
 def write_xml(file_, xml_data):
@@ -157,10 +151,11 @@ def write_xml(file_, xml_data):
     Scrive sul file xml specificato il risultato del test. Ogni url ha la
     seguente struttura xml:
 
-    <url num="n" value="URL">
+    <url value="URL">
         <status>status_code</status>
+        <timeout>timeout</timeout>
         <time>elapsed</time>
-        <response>JSON response</response>
+        <response>response</response>
     </url>
 
     dove n è l'ordinale dell'URL testato all'interno del file originale, URL è
@@ -171,14 +166,15 @@ def write_xml(file_, xml_data):
     root = ET.Element("urls")
     for elem in xml_data:
         url = ET.SubElement(root, "url")
-        url.set("num", str(elem[0]))
-        url.set("value", elem[1])
+        url.set("value", elem[0])
         status = ET.SubElement(url, "status")
-        status.text = str(elem[2])
+        status.text = str(elem[1])
+        timeout = ET.SubElement(url, "timeout")
+        timeout.text = str(elem[2])
         time = ET.SubElement(url, "time")
         time.text = str(elem[3])
         response = ET.SubElement(url, "response")
-        response.text = str(elem[4])
+        response.text = elem[4]
     tree = ET.ElementTree(root)
     tree.write(file_)
 
@@ -186,18 +182,11 @@ def write_xml(file_, xml_data):
 # TODO: mock
 
 
-def make_xml_tuple(url_tup, req, elapsed):
+def make_xml_tuple(url_data, resp, elapsed):
     """
     Costruisce una tupla con tutti i dati necessari per l'output xml
     """
-    json_content = ""
-    try:
-        json_content = req.json()
-    except ValueError:
-        pass
-    xml_data = list(url_tup)
-    xml_data.extend([req.status_code, elapsed, json_content])
-    return xml_data
+    return (url_data[0], resp.status_code, url_data[1], elapsed, resp.text)
 
 if __name__ == "__main__":
     main()
