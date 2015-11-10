@@ -48,7 +48,7 @@ def main():
         exit("No valid urls specified")
 
     for url_tup in good_urls:
-        url = url_tup[2]
+        url = url_tup[1]
         if not args.silent:
             sys.stdout.write("Testing {0}...\r".format(url))
             sys.stdout.flush()
@@ -71,9 +71,8 @@ def read_urls_from(file_):
     Legge il file specificato linea per linea, validando gli url uno alla
     volta.
 
-    Restituisce due liste di tuple (numero_url, valido, url) dove numero_url
-    rappresenta l'ordinale dell'url nella lista originale e valido indica se ha
-    passato o meno il test di validità.
+    Restituisce due liste di tuple (numero_url, url) dove numero_url
+    rappresenta l'ordinale dell'url nella lista originale.
 
     La prima lista è quella degli url validi, la seconda di quelli invalidi
     """
@@ -82,9 +81,9 @@ def read_urls_from(file_):
     with open(file_, "r") as urls_file:
         for i, url in enumerate(urls_file):
             if validators.url(url):
-                good_urls.append((i, True, url.strip()))
+                good_urls.append((i, url.strip()))
             else:
-                bad_urls.append((i, False, url.strip()))
+                bad_urls.append((i, url.strip()))
     return (good_urls, bad_urls)
 
 
@@ -106,7 +105,7 @@ def log_urls(urls, file_="rejected_urls.txt"):
     da validators.url
     """
     # Estrae gli url dalla lista di tuple (numero_url, valido, url)
-    urls = [ "%s%s" % (tup[2], "\n") for tup in urls ]
+    urls = [ "%s%s" % (tup[1], "\n") for tup in urls ]
     with open(file_, "w") as fd:
         fd.writelines(urls)
 
@@ -170,13 +169,13 @@ def write_xml(file_, xml_data):
     for elem in xml_data:
         url = ET.SubElement(root, "url")
         url.set("num", str(elem[0]))
-        url.set("value", elem[2])
+        url.set("value", elem[1])
         status = ET.SubElement(url, "status")
-        status.text = str(elem[3])
+        status.text = str(elem[2])
         time = ET.SubElement(url, "time")
-        time.text = str(elem[4])
+        time.text = str(elem[3])
         response = ET.SubElement(url, "response")
-        response.text = str(elem[5])
+        response.text = str(elem[4])
     tree = ET.ElementTree(root)
     tree.write(file_)
 
