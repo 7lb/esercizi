@@ -13,18 +13,18 @@ class URLTester(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.good_urls = [
-            (0, True, "http://www.google.com/"),
-            (1, True, "http://www.yahoo.com/")
+            (0, "http://www.google.com/"),
+            (1, "http://www.yahoo.com/")
         ]
 
         cls.bad_urls = [
-            (2, False, "http://pippo/"),
-            (3, False, "https://this.is.not.a.real.url/")
+            (2, "http://pippo/"),
+            (3, "https://this.is.not.a.real.url/")
         ]
 
         cls.missing_schemas = [
-            (4, False, "BADURL"),
-            (5, False, "google.com")
+            (4, "BADURL"),
+            (5, "google.com")
         ]
 
     def test_read_urls_from_bad_file(self):
@@ -39,7 +39,7 @@ class URLTester(unittest.TestCase):
         """
         for url in self.bad_urls:
             self.assertRaises(requests.exceptions.ConnectionError,
-                es3.test_url, (url[2]))
+                es3.test_url, (url[1]))
 
     def test_test_url_missing_schema(self):
         """
@@ -47,7 +47,7 @@ class URLTester(unittest.TestCase):
         """
         for url in self.missing_schemas:
             self.assertRaises(requests.exceptions.MissingSchema,
-                    es3.test_url, (url[2]))
+                    es3.test_url, (url[1]))
 
 if __name__ == "__main__":
     unittest.main()
