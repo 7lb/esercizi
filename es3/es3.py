@@ -6,10 +6,11 @@
 #_ = gettext.translation("es3", "./locale").ugettext
 
 import argparse
+import os
 import requests
+import sys
 import time
 import validators
-import sys
 import xml.etree.ElementTree as ET
 
 
@@ -26,6 +27,7 @@ COLOR_FAILURE = "\033[31m"
 COLOR_RESET = "\033[39m"
 WEIGHT_NORMAL = "\033[21m"
 WEIGHT_BOLD = "\033[1m"
+PROGRAM_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 def main():
@@ -99,7 +101,7 @@ def test_url(url):
     return (req, time.time() - start)
 
 
-def log_urls(urls, file_="rejected_urls.txt"):
+def log_urls(urls, file_=os.path.join(PROGRAM_DIR, "rejected_urls.txt")):
     """
     Scrive sul file specificato la lista di url non validi, cioè rifiutati
     da validators.url
@@ -136,7 +138,7 @@ def print_status(req, color):
             req.reason) + COLOR_RESET,
 
 
-def log_body(url, req, file_="failed_responses.txt"):
+def log_body(url, req, file_=os.path.join(PROGRAM_DIR, "failed_responses.txt")):
     """
     Scrive sul file specificato la risposta ricevuta dall'url, solo se è in
     JSON
@@ -179,7 +181,7 @@ def write_xml(file_, xml_data):
     tree = ET.ElementTree(root)
     tree.write(file_)
 
-# TODO: elementtree (output xml)
+
 # TODO: mock
 
 
