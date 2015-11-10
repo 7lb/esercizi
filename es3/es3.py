@@ -106,7 +106,7 @@ def log_urls(urls, file_=os.path.join(PROGRAM_DIR, "rejected_urls.txt")):
     Scrive sul file specificato la lista di url non validi, cioè rifiutati
     da validators.url
     """
-    # Estrae gli url dalla lista di tuple (numero_url, valido, url)
+    # Estrae gli url dalla lista di tuple (numero_url, url)
     urls = [ "%s%s" % (tup[1], "\n") for tup in urls ]
     with open(file_, "w") as fd:
         fd.writelines(urls)
@@ -122,7 +122,7 @@ def print_url(url, req, elapsed):
     print url,
     if req.status_code in OK_STATUS_LIST:
         print_status(req, COLOR_SUCCESS)
-    else:
+    elif req.status_code in ERROR_STATUS_LIST:
         print_status(req, COLOR_FAILURE)
         log_body(url, req)
     print "{0} {1:.2f}s".format("time taken: ", elapsed)
@@ -135,7 +135,8 @@ def print_status(req, color):
     """
     print color + "{0}: {1}".format(
             WEIGHT_BOLD + str(req.status_code) + WEIGHT_NORMAL,
-            req.reason) + COLOR_RESET,
+            req.reason) \
+    + COLOR_RESET,
 
 
 def log_body(url, req, file_=os.path.join(PROGRAM_DIR, "failed_responses.txt")):
