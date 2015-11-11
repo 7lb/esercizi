@@ -58,7 +58,7 @@ class URLTester(unittest.TestCase):
         """
         resp = requests.Response()
         resp.status_code = 200
-        bad_formats = ["", [], ()]
+        bad_formats = [None, "", [], ()]
         for elapsed in bad_formats:
             self.assertRaises(ValueError, es3.print_url,
                               ("", 0) , resp, elapsed)
