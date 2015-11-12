@@ -124,5 +124,30 @@ class TagHandling(unittest.TestCase):
                 self.target_links)
 
 
+class LinkFiltering(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.invalid_links = [
+            "#anchor_inside_page",
+            "strange-scheme://something.com/path/file.ext",
+            None,
+        ]
+
+        cls.valid_links = [
+            "/relative/path/to/file.ext",
+            "http://absolute-path/to/file.ext",
+            "https://secure/connection",
+        ]
+
+    def test_link_filter(self):
+        """
+        Controlla che la funzione di link filtering funzioni correttamente
+        """
+        for link in self.invalid_links:
+            self.assertFalse(es5.link_filter(link))
+
+        for link in self.valid_links:
+            self.assertTrue(es5.link_filter(link))
+
 if __name__ == "__main__":
     unittest.main()
