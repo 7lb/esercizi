@@ -17,7 +17,7 @@ out_socks = []
 err_socks = []
 sock_map = {}
 
-class SocketState():
+class SocketState(object):
     def __init__(self):
         self.received_chunks = []
         self.req_size = 0
