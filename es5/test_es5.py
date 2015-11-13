@@ -139,6 +139,53 @@ class LinkFiltering(unittest.TestCase):
             "https://secure/connection",
         ]
 
+        cls.main_url = "https://en.wikipedia.org/wiki/Main_Page"
+
+        cls.rel_links = [
+            "/w/api.php?action=featuredfeed&amp;feed=potd&amp;feedformat=atom",
+            "/w/api.php?action=featuredfeed&amp;feed=featured&amp;feedformat=atom",
+            "/w/api.php?action=featuredfeed&amp;feed=onthisday&amp;feedformat=atom",
+            "/static/apple-touch/wikipedia.png",
+            "/static/favicon/wikipedia.ico",
+            "/w/opensearch_desc.php",
+            "/w/index.php?title=Special:RecentChanges&amp;feed=atom",
+            "/wiki/Wikipedia",
+            "/wiki/Free_content",
+            "/wiki/Encyclopedia",
+            "/wiki/Wikipedia:Introduction",
+            "/wiki/Special:Statistics",
+            "/wiki/English_language",
+            "/wiki/Harris%27s_List_of_Covent_Garden_Ladies",
+            "/wiki/Rhodesia%27s_Unilateral_Declaration_of_Independence",
+            "/wiki/1975_Australian_constitutional_crisis",
+            "/wiki/Wikipedia:Today%27s_featured_article/November_2015",
+            "/wiki/Wikipedia:Featured_articles",
+            "/wiki/File:Nahem_Shoa_next_to_his_Giant_Portrait_of_Ben,_Hartlepool_Art_Gallery.jpg",
+            "/wiki/Nahem_Shoa",
+        ]
+
+        cls.abs_links = [
+            "https://en.wikipedia.org/w/api.php?action=rsd",
+            "https://creativecommons.org/licenses/by-sa/3.0/",
+            "https://en.wikipedia.org/wiki/Main_Page",
+            "https://meta.wikimedia.org",
+            "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/Gay_nov_20_1992_2115Z.jpg/120px-Gay_nov_20_1992_2115Z.jpg",
+            "https://lists.wikimedia.org/mailman/listinfo/daily-article-l",
+            "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5d/Nahem_Shoa_next_to_his_Giant_Portrait_of_Ben%2C_Hartlepool_Art_Gallery.jpg/100px-Nahem_Shoa_next_to_his_Giant_Portrait_of_Ben%2C_Hartlepool_Art_Gallery.jpg",
+        ]
+
+        cls.relativizable_links = [
+            "https://en.wikipedia.org/w/api.php?action=rsd",
+            "https://en.wikipedia.org/wiki/Main_Page",
+        ]
+
+        cls.non_relativizable_links = [
+            "https://creativecommons.org/licenses/by-sa/3.0/",
+            "https://meta.wikimedia.org",
+            "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/Gay_nov_20_1992_2115Z.jpg/120px-Gay_nov_20_1992_2115Z.jpg",
+            "https://lists.wikimedia.org/mailman/listinfo/daily-article-l"
+        ]
+
     def test_link_filter(self):
         """
         Controlla che la funzione di link filtering funzioni correttamente
@@ -148,6 +195,28 @@ class LinkFiltering(unittest.TestCase):
 
         for link in self.valid_links:
             self.assertTrue(es5.link_filter(link))
+
+    def test_is_relative(self):
+        """
+        Deve tornare true per i link relativi e false per quelli assoluti
+        """
+        for link in self.rel_links:
+            self.assertTrue(es5.is_relative(link))
+
+        for link in self.abs_links:
+            self.assertFalse(es5.is_relative(link))
+
+    def test_can_be_relative(self):
+        """
+        Deve tornare true per i link assoluti che sono relativizzabili per
+        "https://en.wikipedia.org/", false per quelli che non lo sono
+        """
+        url = "https://en.wikipedia.org/"
+        for link in self.relativizable_links:
+            self.assertTrue(es5.can_be_relative(link, url))
+        for link in self.non_relativizable_links:
+            self.assertFalse(es5.can_be_relative(link, url))
+
 
 if __name__ == "__main__":
     unittest.main()

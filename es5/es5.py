@@ -2,8 +2,10 @@
 #-*- coding:utf-8 -*-
 
 import argparse
+import os
 import re
 import requests
+import shutil
 import urlparse
 import validators
 
@@ -18,20 +20,50 @@ def main(url):
     if not validate(url):
         exit("Invalid URL")
     try:
-        html = requests.get(url)
-        html.raise_for_status()
-    except (requests.exceptions.ConnectionError, requests.exceptions.HTTPError):
+        head = requests.head(url)
+    except requests.exceptions.ConnectionError:
         exit("Connection Error")
-    html = html.text
+    try:
+        head.raise_for_status()
+    except requests.exceptions.HTTPError:
+        exit("Bad response")
+    # L'url è valido e il server risponde, iniziamo a salvare il sito
+    url = requests.head(url, allow_redirects=True).url
+    root = urlparse.urlparse(url).netloc
+    if os.path.exists(root):
+        shutil.rmtree(root)
+    os.mkdir(root)
+    os.chdir(root)
+    download(url)
+
+
+def download(url):
+    html = requests.get(url).text
     found_tags = find_all_tags(html)
     referenced_links = isolate_links(found_tags)
-    # Si possono avere almeno tre casi indesiderati in questo caso:
+    # Si possono avere almeno tre casi indesiderati a questo punto:
     # 1. scheme indesiderato (esempio android-app:// su wikipedia)
     # 2. link relativi alla pagina stessa (#qualcosa)
     # 3. None, che si verifica quando un tag selezionato non ha attributi tra
     #    quelli specificati
     # Si risolve filtrando la lista dei link
     referenced_links = filter(link_filter, referenced_links)
+    # Costruisco un dizionario dei link da sostituire con ciò con cui devono
+    # essere sostituiti. In generale si esegue una sostituzione quando si trova
+    # un link assoluto che ha lo stesso sottodominio, dominio e suffisso di
+    # quello preso in input, nel qual caso si può trasformare in un indirizzo
+    # relativo.
+    #
+    # Ad esempio https://en.wikipedia.org/wiki/Main_Page ha sottodominio "en",
+    # dominio "wikipedia" e suffisso "org"; se si trova ad esempio il link
+    # "https://en.wikipedia.org/w/api.php?action=rsd", che ha gli stessi valori
+    # per il sottodominio, dominio e suffisso, si può trasformare nell'indirizzo relativo
+    # "/w/api.php?action=rsd"
+    subs = [
+        (link, make_relative(link)) for link in referenced_links
+        if not is_relative(link) and can_be_relative(link, url)
+    ]
+
     for link in referenced_links:
         print link
 
@@ -106,6 +138,28 @@ def link_filter(link):
     if scheme not in FILTERING_SCHEMES:
         return False
     return True
+
+
+def is_relative(link):
+    parsed = urlparse.urlparse(link)
+    if parsed.scheme:
+        return False
+    if parsed.netloc:
+        return False
+    return True
+
+
+def make_relative(link):
+    return urlparse.urlparse(link).path
+
+
+def can_be_relative(link, url):
+    url = urlparse.urlparse(url)
+    link = urlparse.urlparse(link)
+    if url.netloc == link.netloc:
+        return True
+    return False
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
