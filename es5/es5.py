@@ -39,36 +39,16 @@ def main(url):
 
 def download(url):
     html = requests.get(url).text
-    found_tags = find_all_tags(html)
-    referenced_links = isolate_links(found_tags)
-    # Si possono avere almeno tre casi indesiderati a questo punto:
-    # 1. scheme indesiderato (esempio android-app:// su wikipedia)
-    # 2. link relativi alla pagina stessa (#qualcosa)
-    # 3. None, che si verifica quando un tag selezionato non ha attributi tra
-    #    quelli specificati
-    # Si risolve filtrando la lista dei link
-    referenced_links = filter(link_filter, referenced_links)
-    # Costruisco un dizionario dei link da sostituire con ciò con cui devono
-    # essere sostituiti. In generale si esegue una sostituzione quando si trova
-    # un link assoluto che ha lo stesso sottodominio, dominio e suffisso di
-    # quello preso in input, nel qual caso si può trasformare in un indirizzo
-    # relativo.
-    #
-    # Ad esempio https://en.wikipedia.org/wiki/Main_Page ha sottodominio "en",
-    # dominio "wikipedia" e suffisso "org"; se si trova ad esempio il link
-    # "https://en.wikipedia.org/w/api.php?action=rsd", che ha gli stessi valori
-    # per il sottodominio, dominio e suffisso, si può trasformare nell'indirizzo relativo
-    # "/w/api.php?action=rsd"
-    subs = [
-        (link, make_relative(link)) for link in referenced_links
-        if not is_relative(link) and can_be_relative(link, url)
-    ]
-
-    for link in referenced_links:
-        print link
+    html = relativize(html)
 
 
 def validate(url):
+    """
+    Valida un url. Per essere valido deve non solo superare la validazione
+    standard, ma deve anche avere uno schema tra quelli consentiti
+
+    Torna True se l'url è valido, False altrimenti
+    """
     parse_res = urlparse.urlparse(url)
     if parse_res.scheme in VALIDATING_SCHEMES and validators.url(url):
         return True
@@ -130,6 +110,11 @@ def isolate_value(attr_str, attr_list):
 
 
 def link_filter(link):
+    """
+    Filtra un link
+
+    Ritorna True per un link accettabile, False altrimenti
+    """
     if link is None:
         return False
     if link.startswith("#"):
@@ -141,6 +126,11 @@ def link_filter(link):
 
 
 def is_relative(link):
+    """
+    Controlla se un link è relativo
+
+    Torna True se lo è, False altrimenti
+    """
     parsed = urlparse.urlparse(link)
     if parsed.scheme:
         return False
@@ -150,15 +140,62 @@ def is_relative(link):
 
 
 def make_relative(link):
-    return urlparse.urlparse(link).path
+    """
+    Produce un link relativo a partire da un url assoluto
+    """
+    link_comps = urlparse.urlparse(link)
+    start = "{0.scheme}://{0.netloc}".format(link_comps)
+    return link[len(start):]
 
 
 def can_be_relative(link, url):
+    """
+    Controlla se è possibile ottenere un link relativo a partire da uno
+    assoluto, per un determinato url
+    """
     url = urlparse.urlparse(url)
     link = urlparse.urlparse(link)
     if url.netloc == link.netloc:
         return True
     return False
+
+
+def relativize(html):
+    """
+    Rende tutti i link all'interno di un documento html relativi al dominio
+    stesso, per tutti i link per i quali tale operazione è possibile, lasciando
+    invariati i restanti
+
+    Ritorna una copia modificata del documento html
+    """
+    found_tags = find_all_tags(html)
+    referenced_links = isolate_links(found_tags)
+    # Si possono avere almeno tre casi indesiderati a questo punto:
+    # 1. scheme indesiderato (esempio android-app:// su wikipedia)
+    # 2. link relativi alla pagina stessa (#qualcosa)
+    # 3. None, che si verifica quando un tag selezionato non ha attributi tra
+    #    quelli specificati
+    # Si risolve filtrando la lista dei link
+    referenced_links = filter(link_filter, referenced_links)
+    # Costruisco una lista di tuple dei link da sostituire con ciò con cui
+    # devono essere sostituiti. In generale si esegue una sostituzione quando
+    # si trova un link assoluto che ha lo stesso sottodominio, dominio e
+    # suffisso di quello preso in input, nel qual caso si può trasformare in un
+    # indirizzo relativo.
+    #
+    # Ad esempio https://en.wikipedia.org/wiki/Main_Page ha sottodominio "en",
+    # dominio "wikipedia" e suffisso "org"; se si trova ad esempio il link
+    # "https://en.wikipedia.org/w/api.php?action=rsd", che ha gli stessi valori
+    # per il sottodominio, dominio e suffisso, si può trasformare
+    # nell'indirizzo relativo "/w/api.php?action=rsd"
+    subs = [
+        (link, make_relative(link)) for link in referenced_links
+        if not is_relative(link) and can_be_relative(link, url)
+    ]
+    for abs_, rel in subs:
+        html = html.replace(abs_, rel)
+
+    return html
 
 
 if __name__ == "__main__":
