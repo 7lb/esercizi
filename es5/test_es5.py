@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#! /usr/bin/python2
 #-*- coding:utf-8 -*-
 
 import es5
@@ -201,10 +201,10 @@ class LinkFiltering(unittest.TestCase):
         Deve tornare true per i link relativi e false per quelli assoluti
         """
         for link in self.rel_links:
-            self.assertTrue(es5.is_relative(link))
+            self.assertTrue(es5.is_relative_link(link))
 
         for link in self.abs_links:
-            self.assertFalse(es5.is_relative(link))
+            self.assertFalse(es5.is_relative_link(link))
 
     def test_can_be_relative(self):
         """

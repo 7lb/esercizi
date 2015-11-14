@@ -1,4 +1,4 @@
-#! /usr/bin/python
+#! /usr/bin/python2
 #-*- coding:utf-8 -*-
 
 import argparse
@@ -34,12 +34,13 @@ def main(url):
         shutil.rmtree(root)
     os.mkdir(root)
     os.chdir(root)
-    download(url)
+    root_dir = os.getcwd()
+    download(url, root_dir)
 
 
-def download(url):
+def download(url, root_dir):
     html = requests.get(url).text
-    html = relativize(html)
+    html = relativize(html, root_dir)
 
 
 def validate(url):
@@ -125,7 +126,7 @@ def link_filter(link):
     return True
 
 
-def is_relative(link):
+def is_relative_link(link):
     """
     Controlla se un link è relativo
 
@@ -139,7 +140,7 @@ def is_relative(link):
     return True
 
 
-def make_relative(link):
+def relative_link(link):
     """
     Produce un link relativo a partire da un url assoluto
     """
@@ -147,6 +148,25 @@ def make_relative(link):
     start = "{0.scheme}://{0.netloc}".format(link_comps)
     return link[len(start):]
 
+
+def relative_path(link, rootdir):
+    """
+    Produce un path relativo alla directory specificata, a partire da un link
+    relativo
+
+    NB: un link relativo può avere forme "/dir/file", "./dir/file",
+    "../dir/file" e "dir/file"; "./dir/file" e "dir/file" sono equivalenti e
+    sono path relativi, oltre a essere link relativi. Lo stesso vale per
+    "../dir/file". Invece "/dir/file" è un link relativo (inteso come relativo
+    al dominio cui appartiene) ma è un path assoluto
+    """
+    if not os.path.isabs(link):
+        return link
+    # Non possiamo usare os.path.abspath direttamente perché prende in
+    # considerazione la directory corrente, mentre noi vogliamo un path
+    # assoluto a partire da una directory principale
+    abspath = os.path.join(rootdir, link)
+    return os.path.relpath(abspath)
 
 def can_be_relative(link, url):
     """
@@ -160,11 +180,10 @@ def can_be_relative(link, url):
     return False
 
 
-def relativize(html):
+def relativize(html, root_dir):
     """
-    Rende tutti i link all'interno di un documento html relativi al dominio
-    stesso, per tutti i link per i quali tale operazione è possibile, lasciando
-    invariati i restanti
+    Trasforma tutti i link relativi e assoluti all'interno del documento html
+    in path relativi alla directory dove si sta salvando il sito
 
     Ritorna una copia modificata del documento html
     """
@@ -188,13 +207,20 @@ def relativize(html):
     # "https://en.wikipedia.org/w/api.php?action=rsd", che ha gli stessi valori
     # per il sottodominio, dominio e suffisso, si può trasformare
     # nell'indirizzo relativo "/w/api.php?action=rsd"
-    subs = [
-        (link, make_relative(link)) for link in referenced_links
-        if not is_relative(link) and can_be_relative(link, url)
-    ]
-    for abs_, rel in subs:
-        html = html.replace(abs_, rel)
-
+    #
+    # I link relativi non vengono sostituiti direttamente, ma vengono prima
+    # trasformati in path relativi. Così ad esempio se stiamo analizzando un
+    # documento html e ci troviamo nella nella directory
+    # "en.wikipedia.org/wiki" e si trova un link assoluto come
+    # "https://en.wikipedia.org/w/api.php" lo si va a sotituire non con il link
+    # relativo "/w/api.php" ma con il path relativo "../w/api.php"
+    for link in referenced_links:
+        if can_be_relative(link) and not is_relative(link):
+            rel = relative_path(relative_link(link), root_dir)
+            html = html.replace(link, rel)
+        if is_relative(link):
+            rel = relative_path(link, root_dir)
+            html = html.replace(link, rel)
     return html
 
 
