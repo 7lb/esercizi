@@ -39,8 +39,56 @@ def main(url):
 
 
 def download(url, root_dir):
+    print "Scarico ", url
+    path = relative_path(urlparse.urlparse(url).path, root_dir)
+
+    # file_name è "." quando path è "."; path è "." quando il server risponde
+    # con un url che specifica una cartella e non un file. Questo accade quando
+    # si richiede la pagina principale del sito (e il server risponde con il
+    # file di index. Non dovrebbe accadere in altri contesti nel nostro caso
+    file_name = os.path.basename(path)
+    if file_name == ".":
+        file_name = "index.html"
+        path = os.path.join(path, file_name)
+
+    # A os.makedirs non piace "..", inoltre il path assoluto ci fa comodo più
+    # avanti, quando bisogna ricostruire un url assoluto dai path relativi
+    path = os.path.abspath(path)
+
+    # Se esiste significa che l'abbiamo già scaricato
+    if os.path.exists(path):
+        return
+
+    # Creiamo le cartelle necessarie se non esistono
+    if not os.path.exists(os.path.dirname(path)):
+        os.makedirs(os.path.dirname(path))
+    #os.chdir(os.path.dirname(path))
+
+    # Scarichiamo la pagina html, cambiamo i link al suo interno per renderli
+    # path relativi e infine scriviamo il contenuto sul file
     html = requests.get(url).text
-    html = relativize(html, root_dir)
+    html = relativize(html, url, root_dir)
+    with open(path, "w") as fd:
+        fd.write(html.encode("utf-8"))
+
+    # Dobbiamo ritrovare tutti i link presenti all'interno della pagina
+    found_tags = find_all_tags(html)
+    referenced_links = isolate_links(found_tags)
+    referenced_links = filter(link_filter, referenced_links)
+    # Si filtrano, mantenendo solo i path relativi
+    referenced_links = [
+        link
+        for link in referenced_links
+        if is_relative_link(link)
+    ]
+
+    # Si scaricano ricorsivamente tutti i file interessanti, bisogna però
+    # riconvertire ogni path relativo in un url assoluto
+    for path in referenced_links:
+        path = os.path.abspath(path)
+        resturl = path[len(root_dir):]
+        absurl = "{0}/{1}".format(url.rstrip("/"), resturl.lstrip("/"))
+        download(absurl, root_dir)
 
 
 def validate(url):
@@ -56,7 +104,7 @@ def validate(url):
     return False
 
 
-def find_all_tags(txt, tag_list=["a", "img", "link", "script"]):
+def find_all_tags(txt, tag_list=("a", "img", "link", "script")):
     """
     Trova tutti i tag specificati in tag_list all'interno di txt e li ritorna
     come lista di tuple (tag, attr) dove attr è una stringa contenente tutti
@@ -149,7 +197,7 @@ def relative_link(link):
     return link[len(start):]
 
 
-def relative_path(link, rootdir):
+def relative_path(link, root_dir):
     """
     Produce un path relativo alla directory specificata, a partire da un link
     relativo
@@ -165,7 +213,7 @@ def relative_path(link, rootdir):
     # Non possiamo usare os.path.abspath direttamente perché prende in
     # considerazione la directory corrente, mentre noi vogliamo un path
     # assoluto a partire da una directory principale
-    abspath = os.path.join(rootdir, link)
+    abspath = os.path.join(root_dir, link[1:])
     return os.path.relpath(abspath)
 
 def can_be_relative(link, url):
@@ -180,7 +228,7 @@ def can_be_relative(link, url):
     return False
 
 
-def relativize(html, root_dir):
+def relativize(html, url, root_dir):
     """
     Trasforma tutti i link relativi e assoluti all'interno del documento html
     in path relativi alla directory dove si sta salvando il sito
@@ -215,10 +263,10 @@ def relativize(html, root_dir):
     # "https://en.wikipedia.org/w/api.php" lo si va a sotituire non con il link
     # relativo "/w/api.php" ma con il path relativo "../w/api.php"
     for link in referenced_links:
-        if can_be_relative(link) and not is_relative(link):
+        if can_be_relative(link, url) and not is_relative_link(link):
             rel = relative_path(relative_link(link), root_dir)
             html = html.replace(link, rel)
-        if is_relative(link):
+        if is_relative_link(link):
             rel = relative_path(link, root_dir)
             html = html.replace(link, rel)
     return html
