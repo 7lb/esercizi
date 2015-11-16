@@ -28,7 +28,7 @@ def main(url):
     except requests.exceptions.HTTPError:
         exit("Bad response")
     # L'url è valido e il server risponde, iniziamo a salvare il sito
-    url = requests.head(url, allow_redirects=True).url
+    url = requests.head(url, allow_redirects=True).url.lower()
     root = urlparse.urlparse(url).netloc
     if os.path.exists(root):
         shutil.rmtree(root)
@@ -39,37 +39,41 @@ def main(url):
 
 
 def download(url, root_dir):
-    print "Scarico ", url
     path = relative_path(urlparse.urlparse(url).path, root_dir)
-
-    # file_name è "." quando path è "."; path è "." quando il server risponde
-    # con un url che specifica una cartella e non un file. Questo accade quando
-    # si richiede la pagina principale del sito (e il server risponde con il
-    # file di index. Non dovrebbe accadere in altri contesti nel nostro caso
-    file_name = os.path.basename(path)
-    if file_name == ".":
-        file_name = "index.html"
-        path = os.path.join(path, file_name)
 
     # A os.makedirs non piace "..", inoltre il path assoluto ci fa comodo più
     # avanti, quando bisogna ricostruire un url assoluto dai path relativi
-    path = os.path.abspath(path)
+    path = abspath_dir(path)
+
+    # file_name è "" quando path è una directory; path è una directory quando
+    # il server risponde con un url che specifica una cartella e non un file.
+    # Questo accade quando si richiede la pagina principale del sito (e il
+    # server risponde con il file di index.
+    file_name = os.path.basename(path)
+    if file_name == "":
+        file_name = "index.html"
+        path = os.path.join(path, file_name)
+
 
     # Se esiste significa che l'abbiamo già scaricato
     if os.path.exists(path):
+        print "skippo", url
         return
+    print "scarico", url
 
     # Creiamo le cartelle necessarie se non esistono
     if not os.path.exists(os.path.dirname(path)):
         os.makedirs(os.path.dirname(path))
-    #os.chdir(os.path.dirname(path))
+
+    if os.path.dirname(path) != os.path.abspath(root_dir):
+        os.chdir(os.path.dirname(path))
 
     # Scarichiamo la pagina html, cambiamo i link al suo interno per renderli
     # path relativi e infine scriviamo il contenuto sul file
-    html = requests.get(url).text
+    html = requests.get(url).content
     html = relativize(html, url, root_dir)
     with open(path, "w") as fd:
-        fd.write(html.encode("utf-8"))
+        fd.write(html)
 
     # Dobbiamo ritrovare tutti i link presenti all'interno della pagina
     found_tags = find_all_tags(html)
@@ -85,10 +89,15 @@ def download(url, root_dir):
     # Si scaricano ricorsivamente tutti i file interessanti, bisogna però
     # riconvertire ogni path relativo in un url assoluto
     for path in referenced_links:
-        path = os.path.abspath(path)
-        resturl = path[len(root_dir):]
-        absurl = "{0}/{1}".format(url.rstrip("/"), resturl.lstrip("/"))
+        comps = urlparse.urlparse(url)
+        absurl_beginning = "{0}://{1}".format(comps.scheme, comps.netloc)
+        path = abspath_dir(path)
+        absurl_ending = path[len(root_dir):]
+        absurl = "{0}/{1}".format(absurl_beginning.rstrip("/"),
+                absurl_ending.lstrip(os.sep))
         download(absurl, root_dir)
+        if os.getcwd() != os.path.abspath(root_dir):
+            os.chdir("..")
 
 
 def validate(url):
@@ -210,11 +219,35 @@ def relative_path(link, root_dir):
     """
     if not os.path.isabs(link):
         return link
+
     # Non possiamo usare os.path.abspath direttamente perché prende in
     # considerazione la directory corrente, mentre noi vogliamo un path
     # assoluto a partire da una directory principale
     abspath = os.path.join(root_dir, link[1:])
-    return os.path.relpath(abspath)
+    relpath = os.path.relpath(abspath)
+
+    if could_be_dir(link) and relpath != ".":
+        return "{0}{1}".format(relpath, os.sep)
+    else:
+        return relpath
+
+def abspath_dir(path):
+    """
+    Ritorna il path assoluto a partire da un path relativo, manentendo il
+    separatore finale se il path è una directory
+    """
+    directory = could_be_dir(path)
+    if directory:
+        return os.path.join(os.path.abspath(path), "")
+    else:
+        return os.path.abspath(path)
+
+def could_be_dir(path):
+    """
+    Ritorna True se la directory esiste o se il path specificato potrebbe
+    essere una directory
+    """
+    return os.path.isdir(path) or path.endswith(os.sep)
 
 def can_be_relative(link, url):
     """
@@ -263,12 +296,29 @@ def relativize(html, url, root_dir):
     # "https://en.wikipedia.org/w/api.php" lo si va a sotituire non con il link
     # relativo "/w/api.php" ma con il path relativo "../w/api.php"
     for link in referenced_links:
-        if can_be_relative(link, url) and not is_relative_link(link):
+        if not can_be_relative(link.lower(), url) and not is_relative_link(link):
+            continue
+        if can_be_relative(link.lower(), url) and not is_relative_link(link):
             rel = relative_path(relative_link(link), root_dir)
-            html = html.replace(link, rel)
         if is_relative_link(link):
             rel = relative_path(link, root_dir)
-            html = html.replace(link, rel)
+
+        # Trova tutte le sottostringhe *esatte*, così nel caso speciale in cui
+        # rel sia "." (perché si trova un link che punta alla homepage) non si
+        # andrà a sostituire un link del tipo "http://www.sito.com/subdir" con
+        # il link relativo ".subdir" come invece accadrebbe sostituendo in modo
+        # banale tutte le occorrenze di "http://www.sito.com/" con "."
+        if could_be_dir(rel) and rel.startswith(".") and not rel.startswith(".."):
+            rel = "{0}{1}{2}".format(rel, os.sep, "index.html")
+        elif could_be_dir(rel):
+            rel = "{0}{1}".format(rel, "index.html")
+        else:
+            continue
+
+        print "sostituisco", link, "con", rel
+        pattern = r"({0}/?)[\"'\s]".format(link.rstrip("/"))
+        print re.findall(pattern, html)
+        html = re.sub(pattern, rel, html)
     return html
 
 
