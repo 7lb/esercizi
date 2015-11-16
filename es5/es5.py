@@ -34,8 +34,7 @@ def main(url):
         shutil.rmtree(root)
     os.mkdir(root)
     os.chdir(root)
-    root_dir = os.getcwd()
-    download(url, root_dir)
+    download(url, os.getcwd())
 
 
 def download(url, root_dir):
@@ -89,12 +88,7 @@ def download(url, root_dir):
     # Si scaricano ricorsivamente tutti i file interessanti, bisogna però
     # riconvertire ogni path relativo in un url assoluto
     for path in referenced_links:
-        comps = urlparse.urlparse(url)
-        absurl_beginning = "{0}://{1}".format(comps.scheme, comps.netloc)
-        path = abspath_dir(path)
-        absurl_ending = path[len(root_dir):]
-        absurl = "{0}/{1}".format(absurl_beginning.rstrip("/"),
-                absurl_ending.lstrip(os.sep))
+        absurl = abs_url(path, url, root_dir)
         download(absurl, root_dir)
         if os.getcwd() != os.path.abspath(root_dir):
             os.chdir("..")
@@ -296,9 +290,9 @@ def relativize(html, url, root_dir):
     # "https://en.wikipedia.org/w/api.php" lo si va a sotituire non con il link
     # relativo "/w/api.php" ma con il path relativo "../w/api.php"
     for link in referenced_links:
-        if not can_be_relative(link.lower(), url) and not is_relative_link(link):
+        if not is_relative_link(link) and not can_be_relative(link.lower(), url):
             continue
-        if can_be_relative(link.lower(), url) and not is_relative_link(link):
+        if not is_relative_link(link) and can_be_relative(link.lower(), url):
             rel = relative_path(relative_link(link), root_dir)
         if is_relative_link(link):
             rel = relative_path(link, root_dir)
@@ -308,19 +302,28 @@ def relativize(html, url, root_dir):
         # andrà a sostituire un link del tipo "http://www.sito.com/subdir" con
         # il link relativo ".subdir" come invece accadrebbe sostituendo in modo
         # banale tutte le occorrenze di "http://www.sito.com/" con "."
-        if could_be_dir(rel) and rel.startswith(".") and not rel.startswith(".."):
-            rel = "{0}{1}{2}".format(rel, os.sep, "index.html")
+        if could_be_dir(rel) and rel.startswith(".") and not rel.startswith(".."):#re.match(r"^\.[^\.]", rel):
+            rel = os.sep.join([rel, "index.html"])
         elif could_be_dir(rel):
             rel = "{0}{1}".format(rel, "index.html")
         else:
             continue
 
         print "sostituisco", link, "con", rel
-        pattern = r"({0}/?)[\"'\s]".format(link.rstrip("/"))
-        print re.findall(pattern, html)
+        pattern = r"({0}\/?)(?=[\"'\s])".format(link.rstrip("/"))
         html = re.sub(pattern, rel, html)
     return html
 
+def abs_url(path, base_url, root_dir):
+    """
+    Costruisce un url assoluto a partire da un url di base e un path relativo
+    """
+    comps = urlparse.urlparse(base_url)
+    absurl_beginning = "{0}://{1}".format(comps.scheme, comps.netloc)
+    path = abspath_dir(path)
+    absurl_ending = path[len(root_dir):]
+    return "{0}/{1}".format(absurl_beginning.rstrip("/"),
+        absurl_ending.lstrip(os.sep))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
