@@ -133,33 +133,57 @@ def isolate_value(attr_str, attr_list):
     """
     Isola i valori degli attributi passati come parametro
     """
-    for attr in attr_list:
-        attr_pos = attr_str.find(attr)
-        if attr_pos == -1:
-            continue
-        # elimino fino all'ultimo carattere del nome dell'attributo
-        val = attr_str[attr_pos + len(attr):]
-        # elimino tutto finché non trovo il primo carattere del valore
-        while val.startswith(" ") or val.startswith("="):
-            val = val[1:]
-        # se il valore è quotato con apici singoli o doppi elimino tutto ciò
-        # che compare dagli apici di chiusura in poi, e della stringa rimanente
-        # prendo tutto tranne il primo elemento (che è l'apice di apertura)
-        if val.startswith('"') or val.startswith("'"):
-            val = val[1:val.find(val[0], 1)]
-        # se il valore non è quotato elimino tutto ciò che compare dal primo
-        # spazio in poi
-        else:
-            value_end = val.find(" ")
-            # se il valore è quello dell'ultimo attributo non c'è uno spazio
-            if value_end != -1:
-                val = val[:value_end]
-        # siamo di fronte a uno scheme relative url. Li trattiamo come https; è
-        # sempre valido richiedere una risorsa su https, anche se è solo
-        # disponibile su http, il contrario non è vero
-        if val.startswith("//"):
-            val = "https:{0}".format(val)
-        return val
+    # Dallo standard HTML[0]
+    # Gli attributi hanno un nome, seguito da zero o più space characters[1]
+    # seguito da un carattere =, seguito da zero o più space characters.  Gli
+    # attributi quotati possono iniziare con apici singoli o doppi e possono
+    # contenere gli stessi caratteri (vedere [2] per una lista esatta) con la
+    # differenza che gli attributi quotati da apice singolo non possono
+    # contenerlo al loro interno, viceversa per gli apici doppi.
+    # Gli attributi non quotati non possono contenere space characters, apici
+    # singoli, apici doppi, caratteri minore di e maggiore di (<, >), tra gli
+    # altri.
+    #
+    # Degno di nota il fatto che tra l'ultimo attributo del tag e il carattere
+    # di chiusura (> o />) deve essere presente uno space character. Questo ci
+    # permette di trovare gli attributi non quotati cercando spazi, in quanto
+    # <a href=link.html> non è html valido.
+    #
+    # Riferimenti:
+    #[0]: https://html.spec.whatwg.org/multipage/syntax.html#attributes
+    #[1]: https://html.spec.whatwg.org/multipage/infrastructure.html#space-character
+    #[2]: https://html.spec.whatwg.org/multipage/syntax.html#syntax-attribute-value
+    pattern = re.compile(
+        r"""
+        (?:{0})         # gli attributi che ci interessano
+        \s*=\s*         # zero o più spazi prima e dopo l'uguale
+        (?:             # discrimino tra attributi quotati o meno
+            (?:\"|')    # controllo quelli quotati
+            (.*?)       # catturo tutto (lazy)
+            (?:\"|')    # fino all'apice di chiusura
+            |           # altrimenti l'attributo non è quotato
+            (.*?)       # allora catturo tutto (lazy)
+            (?:\s|$)    # finché non trovo uno spazio o EOL
+        )
+        """.format("|".join(attr_list)),
+        re.VERBOSE
+    )
+
+    val = pattern.search(attr_str)
+    # val potrebbe essere None
+    if val is None:
+        return None
+
+    if val.group(1) is None:
+        if val.group(2) is None:
+            return None
+        val = val.group(2)
+    else:
+        val = val.group(1)
+
+    if val.startswith("//"):
+        val = "https:{0}".format(val)
+    return val
 
 
 def link_filter(link):
