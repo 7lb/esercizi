@@ -1,6 +1,10 @@
 #! /usr/bin/python2
 #-*- coding:utf-8 -*-
 
+"""
+Modulo per il download in locale di un sito remoto
+"""
+
 import argparse
 import os
 import re
@@ -16,7 +20,10 @@ VALIDATING_SCHEMES = ["http", "https"]
 FILTERING_SCHEMES = ["http", "https", ""]
 
 
-def main(url):
+def begin(url):
+    """
+    Controlla la validità dell'url e fa partire il download
+    """
     if not validate(url):
         exit("Invalid URL")
     try:
@@ -38,6 +45,11 @@ def main(url):
 
 
 def download(url, root_dir):
+    """
+    Funzione ricorsiva per la creazione delle directory nel filesystem,
+    download dei file html e non, e aggiustamento degli url all'interno
+    dell'html in path relativi
+    """
     path = relative_path(urlparse.urlparse(url).path, root_dir)
 
     # A os.makedirs non piace "..", inoltre il path assoluto ci fa comodo più
@@ -52,7 +64,6 @@ def download(url, root_dir):
     if file_name == "":
         file_name = "index.html"
         path = os.path.join(path, file_name)
-
 
     # Se esiste significa che l'abbiamo già scaricato
     if os.path.exists(path):
@@ -70,25 +81,15 @@ def download(url, root_dir):
     # Scarichiamo la pagina html, cambiamo i link al suo interno per renderli
     # path relativi e infine scriviamo il contenuto sul file
     html = requests.get(url).content
-    html = relativize(html, url, root_dir)
-    with open(path, "w") as fd:
-        fd.write(html)
-
-    # Dobbiamo ritrovare tutti i link presenti all'interno della pagina
-    found_tags = find_all_tags(html)
-    referenced_links = isolate_links(found_tags)
-    referenced_links = filter(link_filter, referenced_links)
-    # Si filtrano, mantenendo solo i path relativi
-    referenced_links = [
-        link
-        for link in referenced_links
-        if is_relative_link(link)
-    ]
+    subs, downloads = check_links(html, url, root_dir)
+    html = substitute(html, subs)
+    with open(path, "w") as file_desc:
+        file_desc.write(html)
 
     # Si scaricano ricorsivamente tutti i file interessanti, bisogna però
     # riconvertire ogni path relativo in un url assoluto
-    for path in referenced_links:
-        absurl = abs_url(path, url, root_dir)
+    for rel in downloads:
+        absurl = abs_url(rel, url, root_dir)
         download(absurl, root_dir)
         if os.getcwd() != os.path.abspath(root_dir):
             os.chdir("..")
@@ -255,13 +256,16 @@ def can_be_relative(link, url):
     return False
 
 
-def relativize(html, url, root_dir):
+def check_links(html, url, root_dir):
     """
-    Trasforma tutti i link relativi e assoluti all'interno del documento html
-    in path relativi alla directory dove si sta salvando il sito
+    Trova tutti i link da sostituire o da scaraicare all'interno del file html
 
-    Ritorna una copia modificata del documento html
+    Ritorna una lista di tuple (link, rel) dove link è il link da sostituire e
+    rel è il path relativo con il quale va sostituito, e una lista con i file
+    da scaricare
     """
+    subs = []
+    downloads = []
     found_tags = find_all_tags(html)
     referenced_links = isolate_links(found_tags)
     # Si possono avere almeno tre casi indesiderati a questo punto:
@@ -297,22 +301,31 @@ def relativize(html, url, root_dir):
         if is_relative_link(link):
             rel = relative_path(link, root_dir)
 
-        # Trova tutte le sottostringhe *esatte*, così nel caso speciale in cui
-        # rel sia "." (perché si trova un link che punta alla homepage) non si
-        # andrà a sostituire un link del tipo "http://www.sito.com/subdir" con
-        # il link relativo ".subdir" come invece accadrebbe sostituendo in modo
-        # banale tutte le occorrenze di "http://www.sito.com/" con "."
-        if could_be_dir(rel) and rel.startswith(".") and not rel.startswith(".."):#re.match(r"^\.[^\.]", rel):
+        if could_be_dir(rel) and re.match(r"\.{1}", rel):
             rel = os.sep.join([rel, "index.html"])
         elif could_be_dir(rel):
             rel = "{0}{1}".format(rel, "index.html")
         else:
+            downloads.append(rel)
             continue
+        subs.append((link, rel))
+        downloads.append(rel)
+    return subs, downloads
 
+
+def substitute(html, subs):
+    """
+    Sostituisce tutti i link presenti nel file html con path relativi, se
+    possibile
+
+    Ritorna il file html modificato
+    """
+    for link, rel in subs:
         print "sostituisco", link, "con", rel
         pattern = r"({0}\/?)(?=[\"'\s])".format(link.rstrip("/"))
         html = re.sub(pattern, rel, html)
     return html
+
 
 def abs_url(path, base_url, root_dir):
     """
@@ -329,4 +342,4 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("url", help="The url of the webpage to download")
     args = parser.parse_args()
-    main(args.url)
+    begin(args.url)
