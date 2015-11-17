@@ -115,8 +115,8 @@ def find_all_tags(txt, tag_list=("a", "img", "link", "script")):
     gli attributi del tag
     """
     pattern_tags = "|".join(tag_list)
-    pattern = "<({0})([^>]+)".format(pattern_tags)
-    return re.findall(pattern, txt)
+    pattern = re.compile(r"<({0})([^>]+)".format(pattern_tags))
+    return pattern.findall(txt)
 
 
 def isolate_links(tags):
@@ -325,13 +325,12 @@ def check_links(html, url, root_dir):
         if is_relative_link(link):
             rel = relative_path(link, root_dir)
 
-        if could_be_dir(rel) and re.match(r"\.{1}", rel):
-            rel = os.sep.join([rel, "index.html"])
-        elif could_be_dir(rel):
-            rel = "{0}{1}".format(rel, "index.html")
+        if could_be_dir(rel):
+            rel = os.path.join(rel, "index.html")
         else:
             downloads.append(rel)
             continue
+
         subs.append((link, rel))
         downloads.append(rel)
     return subs, downloads
@@ -346,8 +345,8 @@ def substitute(html, subs):
     """
     for link, rel in subs:
         print "sostituisco", link, "con", rel
-        pattern = r"({0}\/?)(?=[\"'\s])".format(link.rstrip("/"))
-        html = re.sub(pattern, rel, html)
+        pattern = re.compile(r"({0}\/?)(?=[\"'\s])".format(link.rstrip("/")))
+        html = pattern.sub(rel, html)
     return html
 
 
@@ -361,6 +360,7 @@ def abs_url(path, base_url, root_dir):
     absurl_ending = path[len(root_dir):]
     return "{0}/{1}".format(absurl_beginning.rstrip("/"),
         absurl_ending.lstrip(os.sep))
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

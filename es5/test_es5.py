@@ -3,7 +3,9 @@
 
 import es5
 import itertools
+import os
 import unittest
+import urlparse
 
 class UrlValidating(unittest.TestCase):
     @classmethod
@@ -175,8 +177,8 @@ class LinkFiltering(unittest.TestCase):
         ]
 
         cls.relativizable_links = [
-            "https://en.wikipedia.org/w/api.php?action=rsd",
-            "https://en.wikipedia.org/wiki/Main_Page",
+            ("https://en.wikipedia.org/w/api.php?action=rsd", "w/api.php?action=rsd"),
+            ("https://en.wikipedia.org/wiki/Main_Page", "wiki/Main_Page"),
         ]
 
         cls.non_relativizable_links = [
@@ -196,7 +198,7 @@ class LinkFiltering(unittest.TestCase):
         for link in self.valid_links:
             self.assertTrue(es5.link_filter(link))
 
-    def test_is_relative(self):
+    def test_is_relative_link(self):
         """
         Deve tornare true per i link relativi e false per quelli assoluti
         """
@@ -212,10 +214,98 @@ class LinkFiltering(unittest.TestCase):
         "https://en.wikipedia.org/", false per quelli che non lo sono
         """
         url = "https://en.wikipedia.org/"
-        for link in self.relativizable_links:
+        for link, _ in self.relativizable_links:
             self.assertTrue(es5.can_be_relative(link, url))
         for link in self.non_relativizable_links:
             self.assertFalse(es5.can_be_relative(link, url))
+
+
+class PathManipulations(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.abs_urls = [
+            "http://en.wikipedia.org/wiki/Main_Page",
+            "https://www.smallsites.com/About/",
+            "http://yahoo.com/",
+        ]
+
+        cls.rel_links = [
+            "/wiki/Main_Page",
+            "/About/",
+            "/",
+        ]
+
+        cls.rel_paths = [
+            "wiki/Main_Page",
+            "About/",
+            ".",
+        ]
+
+        cls.abs_paths = [
+            "en.wikipedia.org/wiki/Main_Page",
+            "www.smallsites.com/About/",
+            "yahoo.com/",
+        ]
+
+        cls.dirs = [
+            "/abs/dir/",
+            "./rel/dir/",
+            "../rel/dir/",
+            "rel/dir/",
+            ".",
+            "..",
+        ]
+
+        cls.files = [
+            "/abs/file",
+            "./rel/file",
+            "../rel/file",
+            "rel/file",
+        ]
+
+    def test_relative_link(self):
+        """
+        Controlla la funzione di relativizzazione dei link
+        """
+        for i, url in enumerate(self.abs_urls):
+            self.assertEqual(es5.relative_link(url), self.rel_links[i])
+
+    def test_relative_path(self):
+        """
+        Controlla che relative_path torni il corretto path relativo
+        """
+        for i, url in enumerate(self.abs_urls):
+            root_dir = os.path.join(os.getcwd(), urlparse.urlparse(url).netloc)
+            if not os.path.exists(root_dir):
+                os.makedirs(root_dir)
+            os.chdir(root_dir)
+
+            self.assertEqual(es5.relative_path(self.rel_links[i], root_dir),
+                    self.rel_paths[i])
+
+            os.chdir("..")
+            os.rmdir(root_dir)
+
+    def test_abspath_dir(self):
+        """
+        Controlla che il path assoluto ritornato da abspath_dir sia corretto
+        """
+        for path in self.abs_paths:
+            full_path = os.path.join(os.getcwd(), path)
+
+            self.assertEqual(es5.abspath_dir(path),
+                    full_path)
+
+    def test_could_be_dir(self):
+        """
+        Controlla che could_be_dir torni True per ogni directory e False per
+        ogni file
+        """
+        for dir_ in self.dirs:
+            self.assertTrue(es5.could_be_dir(dir_))
+
+        for file_ in self.files:
+            self.assertFalse(es5.could_be_dir(file_))
 
 
 if __name__ == "__main__":
