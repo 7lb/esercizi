@@ -35,27 +35,25 @@ def begin(url):
     except requests.exceptions.HTTPError:
         exit("Bad response")
     # L'url è valido e il server risponde, iniziamo a salvare il sito
-    url = requests.head(url, allow_redirects=True).url.lower()
+    url = requests.head(url, allow_redirects=True).url
     root = urlparse.urlparse(url).netloc
     if os.path.exists(root):
         shutil.rmtree(root)
     os.mkdir(root)
     os.chdir(root)
-    download(url, os.getcwd())
+    download(url)
 
 
-def download(url, root_dir):
+def download(url):
     """
     Funzione ricorsiva per la creazione delle directory nel filesystem,
     download dei file html e non, e aggiustamento degli url all'interno
     dell'html in path relativi
     """
-    path = relative_path(urlparse.urlparse(url).path, root_dir)
 
-    # A os.makedirs non piace "..", inoltre il path assoluto ci fa comodo più
-    # avanti, quando bisogna ricostruire un url assoluto dai path relativi
-    path = abspath_dir(path)
-
+    url_comps = urlparse.urlparse(url)
+    path = url[len(url_comps.scheme + url_comps.netloc) + 3:]
+    path = os.path.abspath(path.rstrip(os.sep))
     # file_name è "" quando path è una directory; path è una directory quando
     # il server risponde con un url che specifica una cartella e non un file.
     # Questo accade quando si richiede la pagina principale del sito (e il
@@ -75,13 +73,10 @@ def download(url, root_dir):
     if not os.path.exists(os.path.dirname(path)):
         os.makedirs(os.path.dirname(path))
 
-    if os.path.dirname(path) != os.path.abspath(root_dir):
-        os.chdir(os.path.dirname(path))
-
     # Scarichiamo la pagina html, cambiamo i link al suo interno per renderli
     # path relativi e infine scriviamo il contenuto sul file
     html = requests.get(url).content
-    subs, downloads = check_links(html, url, root_dir)
+    subs, downloads = check_links(html, url)
     html = substitute(html, subs)
     with open(path, "w") as file_desc:
         file_desc.write(html)
@@ -89,10 +84,8 @@ def download(url, root_dir):
     # Si scaricano ricorsivamente tutti i file interessanti, bisogna però
     # riconvertire ogni path relativo in un url assoluto
     for rel in downloads:
-        absurl = abs_url(rel, url, root_dir)
-        download(absurl, root_dir)
-        if os.getcwd() != os.path.abspath(root_dir):
-            os.chdir("..")
+        absurl = abs_url(rel, url)
+        download(absurl)
 
 
 def validate(url):
@@ -225,48 +218,13 @@ def relative_link(link):
     return link[len(start):]
 
 
-def relative_path(link, root_dir):
-    """
-    Produce un path relativo alla directory specificata, a partire da un link
-    relativo
-
-    NB: un link relativo può avere forme "/dir/file", "./dir/file",
-    "../dir/file" e "dir/file"; "./dir/file" e "dir/file" sono equivalenti e
-    sono path relativi, oltre a essere link relativi. Lo stesso vale per
-    "../dir/file". Invece "/dir/file" è un link relativo (inteso come relativo
-    al dominio cui appartiene) ma è un path assoluto
-    """
-    if not os.path.isabs(link):
-        return link
-
-    # Non possiamo usare os.path.abspath direttamente perché prende in
-    # considerazione la directory corrente, mentre noi vogliamo un path
-    # assoluto a partire da una directory principale
-    abspath = os.path.join(root_dir, link[1:])
-    relpath = os.path.relpath(abspath)
-
-    if could_be_dir(link) and relpath != ".":
-        return "{0}{1}".format(relpath, os.sep)
-    else:
-        return relpath
-
-def abspath_dir(path):
-    """
-    Ritorna il path assoluto a partire da un path relativo, manentendo il
-    separatore finale se il path è una directory
-    """
-    directory = could_be_dir(path)
-    if directory:
-        return os.path.join(os.path.abspath(path), "")
-    else:
-        return os.path.abspath(path)
-
 def could_be_dir(path):
     """
     Ritorna True se la directory esiste o se il path specificato potrebbe
     essere una directory
     """
     return os.path.isdir(path) or path.endswith(os.sep)
+
 
 def can_be_relative(link, url):
     """
@@ -275,12 +233,10 @@ def can_be_relative(link, url):
     """
     url = urlparse.urlparse(url)
     link = urlparse.urlparse(link)
-    if url.netloc == link.netloc:
-        return True
-    return False
+    return url.netloc == link.netloc
 
 
-def check_links(html, url, root_dir):
+def check_links(html, url):
     """
     Trova tutti i link da sostituire o da scaraicare all'interno del file html
 
@@ -318,21 +274,20 @@ def check_links(html, url, root_dir):
     # "https://en.wikipedia.org/w/api.php" lo si va a sotituire non con il link
     # relativo "/w/api.php" ma con il path relativo "../w/api.php"
     for link in referenced_links:
-        if not is_relative_link(link) and not can_be_relative(link.lower(), url):
+        if not is_relative_link(link) and not can_be_relative(link, url):
             continue
-        if not is_relative_link(link) and can_be_relative(link.lower(), url):
-            rel = relative_path(relative_link(link), root_dir)
+        if not is_relative_link(link) and can_be_relative(link, url):
+            rel = relative_link(link)
         if is_relative_link(link):
-            rel = relative_path(link, root_dir)
+            rel = link
 
         if could_be_dir(rel):
             rel = os.path.join(rel, "index.html")
-        else:
-            downloads.append(rel)
-            continue
 
-        subs.append((link, rel))
-        downloads.append(rel)
+        downloads.append(abs_url(rel, url))
+
+        if rel != link:
+            subs.append((link, rel))
     return subs, downloads
 
 
@@ -350,16 +305,13 @@ def substitute(html, subs):
     return html
 
 
-def abs_url(path, base_url, root_dir):
+def abs_url(path, base_url):
     """
     Costruisce un url assoluto a partire da un url di base e un path relativo
     """
     comps = urlparse.urlparse(base_url)
-    absurl_beginning = "{0}://{1}".format(comps.scheme, comps.netloc)
-    path = abspath_dir(path)
-    absurl_ending = path[len(root_dir):]
-    return "{0}/{1}".format(absurl_beginning.rstrip("/"),
-        absurl_ending.lstrip(os.sep))
+    temp_path = os.sep.join([comps.netloc, os.path.dirname(comps.path), path])
+    return os.path.realpath(temp_path)
 
 
 if __name__ == "__main__":
