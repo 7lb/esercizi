@@ -52,8 +52,13 @@ def download(url):
     """
 
     url_comps = urlparse.urlparse(url)
-    path = url[len(url_comps.scheme + url_comps.netloc) + 3:]
-    path = os.path.abspath(path.rstrip(os.sep))
+    path = url_comps.path.lstrip(os.sep)
+    #path = url[len(url_comps.scheme + url_comps.netloc) + 3:]
+    path = path
+    # Se con lstrip rimaniamo con una stringa vuota allora siamo nella root
+    if not path:
+        path = "."
+    path = abspath_dir(path)
     # file_name è "" quando path è una directory; path è una directory quando
     # il server risponde con un url che specifica una cartella e non un file.
     # Questo accade quando si richiede la pagina principale del sito (e il
@@ -83,9 +88,8 @@ def download(url):
 
     # Si scaricano ricorsivamente tutti i file interessanti, bisogna però
     # riconvertire ogni path relativo in un url assoluto
-    for rel in downloads:
-        absurl = abs_url(rel, url)
-        download(absurl)
+    for url in downloads:
+        download(url)
 
 
 def validate(url):
@@ -215,7 +219,23 @@ def relative_link(link):
     """
     link_comps = urlparse.urlparse(link)
     start = "{0.scheme}://{0.netloc}".format(link_comps)
-    return link[len(start):]
+    tmp_link = link[len(start):]
+    if not tmp_link:
+        # può succede con link che non terminano con /
+        tmp_link = "/"
+    return tmp_link
+
+
+def abspath_dir(path):
+    """
+    Ritorna il path assoluto a partire da un path relativo, manentendo il
+    separatore finale se il path è una directory
+    """
+    directory = could_be_dir(path)
+    if directory:
+        return os.path.join(os.path.abspath(path), "")
+    else:
+        return os.path.abspath(path)
 
 
 def could_be_dir(path):
@@ -233,7 +253,7 @@ def can_be_relative(link, url):
     """
     url = urlparse.urlparse(url)
     link = urlparse.urlparse(link)
-    return url.netloc == link.netloc
+    return url.netloc.lower() == link.netloc.lower()
 
 
 def check_links(html, url):
@@ -286,8 +306,14 @@ def check_links(html, url):
 
         downloads.append(abs_url(rel, url))
 
+        urlpath = urlparse.urlparse(url).path
         if rel != link:
-            subs.append((link, rel))
+            if rel.lower() == urlpath.lower():
+                subs.append((link, "."))
+            else:
+                pseudo_cwd = os.path.dirname(os.path.abspath(urlpath))
+                rel = os.path.relpath(rel, pseudo_cwd)
+                subs.append((link, rel))
     return subs, downloads
 
 
@@ -310,8 +336,12 @@ def abs_url(path, base_url):
     Costruisce un url assoluto a partire da un url di base e un path relativo
     """
     comps = urlparse.urlparse(base_url)
-    temp_path = os.sep.join([comps.netloc, os.path.dirname(comps.path), path])
-    return os.path.realpath(temp_path)
+    if os.path.isabs(path):
+        temp_path = os.sep.join([comps.netloc, path])
+    else:
+        temp_path = os.sep.join([comps.netloc, os.path.dirname(comps.path), path])
+    temp_path = os.path.normpath(temp_path)
+    return "://".join([comps.scheme, temp_path])
 
 
 if __name__ == "__main__":
