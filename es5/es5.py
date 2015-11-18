@@ -36,12 +36,20 @@ def begin(url):
         exit("Bad response")
     # L'url è valido e il server risponde, iniziamo a salvare il sito
     url = requests.head(url, allow_redirects=True).url.lower()
-    root = urlparse.urlparse(url).netloc
+    url_comps = urlparse.urlparse(url)
+
+    root = url_comps.netloc
+    root = os.path.abspath(root)
+
+    start_dir = os.path.dirname(url_comps.path)[1:]
+    start_dir = os.path.join(root, start_dir)
+
     if os.path.exists(root):
         shutil.rmtree(root)
-    os.mkdir(root)
-    os.chdir(root)
-    download(url, os.getcwd())
+    os.makedirs(start_dir)
+    os.chdir(start_dir)
+
+    download(url, root)
 
 
 def download(url, root_dir):
@@ -75,8 +83,7 @@ def download(url, root_dir):
     if not os.path.exists(os.path.dirname(path)):
         os.makedirs(os.path.dirname(path))
 
-    if os.path.dirname(path) != os.path.abspath(root_dir):
-        os.chdir(os.path.dirname(path))
+    os.chdir(os.path.dirname(path))
 
     # Scarichiamo la pagina html, cambiamo i link al suo interno per renderli
     # path relativi e infine scriviamo il contenuto sul file
@@ -90,8 +97,8 @@ def download(url, root_dir):
     # riconvertire ogni path relativo in un url assoluto
     for rel in downloads:
         absurl = abs_url(rel, url, root_dir)
-        download(absurl, root_dir)
-        if os.getcwd() != os.path.abspath(root_dir):
+        download(absurl, os.getcwd())
+        if os.getcwd() != root_dir:
             os.chdir("..")
 
 
