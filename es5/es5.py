@@ -15,9 +15,24 @@ import validators
 
 
 # Usati per la validazione dell'input utente
-VALIDATING_SCHEMES = ["http", "https"]
+VALIDATING_SCHEMES = ("http", "https")
+
 # Usati per il filtro dei link trovati all'interno delle pagine
-FILTERING_SCHEMES = ["http", "https", ""]
+FILTERING_SCHEMES = ("http", "https", "")
+
+# Stringhe raw perché finiscono in una regex
+INTERESTING_ATTRS = (r"href", r"src", r"url\(")
+
+# File per i quali non ci si aspetta di torvare link all'interno
+# Q: Perché invece non fare una whitelist composta da htm[l], css e forse js?
+# R: Perché siti come wikipedia servono pagine senza estensione
+# TODO: Valutare l'idea di aggiungere l'estensione html a tutte le pagine
+#       servite senza, e sostituire la blacklist con una whitelist
+NOPARSE_EXTS = (
+    ".jpg", ".jpeg", ".png", ".gif", ".ico", ".zip", ".rar", ".7z", ".tar",
+    ".gz", ".xz", ".exe", ".a", ".so", ".lib", ".dll", ".epub", ".pdf", ".ttl",
+    ".xml", ".rdf"
+)
 
 
 def begin(url):
@@ -53,8 +68,6 @@ def download(url):
 
     url_comps = urlparse.urlparse(url)
     path = url_comps.path.lstrip(os.sep)
-    #path = url[len(url_comps.scheme + url_comps.netloc) + 3:]
-    path = path
     # Se con lstrip rimaniamo con una stringa vuota allora siamo nella root
     if not path:
         path = "."
@@ -72,7 +85,6 @@ def download(url):
     if os.path.exists(path):
         print "skippo", url
         return
-    print "scarico", url
 
     # Creiamo le cartelle necessarie se non esistono
     if not os.path.exists(os.path.dirname(path)):
@@ -81,15 +93,20 @@ def download(url):
     # Scarichiamo la pagina html, cambiamo i link al suo interno per renderli
     # path relativi e infine scriviamo il contenuto sul file
     html = requests.get(url).content
-    subs, downloads = check_links(html, url)
-    html = substitute(html, subs)
+
+    subs = downloads = []
+    if not file_name.lower().endswith(NOPARSE_EXTS):
+        subs, downloads = check_links(html, url)
+        html = substitute(html, subs)
+
     with open(path, "w") as file_desc:
         file_desc.write(html)
 
     # Si scaricano ricorsivamente tutti i file interessanti, bisogna però
     # riconvertire ogni path relativo in un url assoluto
-    for url in downloads:
-        download(url)
+    for down in downloads:
+        print "da", url, "scarico", down
+        download(down)
 
 
 def validate(url):
@@ -105,28 +122,7 @@ def validate(url):
     return False
 
 
-def find_all_tags(txt, tag_list=("a", "img", "link", "script")):
-    """
-    Trova tutti i tag specificati in tag_list all'interno di txt e li ritorna
-    come lista di tuple (tag, attr) dove attr è una stringa contenente tutti
-    gli attributi del tag
-    """
-    pattern_tags = "|".join(tag_list)
-    pattern = re.compile(r"<({0})([^>]+)".format(pattern_tags))
-    return pattern.findall(txt)
-
-
-def isolate_links(tags):
-    """
-    Ritorna una lista di link
-    """
-    links = []
-    for tag in tags:
-        links.append(isolate_value(tag[1], ["href", "src"]))
-    return links
-
-
-def isolate_value(attr_str, attr_list):
+def find_urls(txt, attr_list):
     """
     Isola i valori degli attributi passati come parametro
     """
@@ -152,35 +148,32 @@ def isolate_value(attr_str, attr_list):
     #[2]: https://html.spec.whatwg.org/multipage/syntax.html#syntax-attribute-value
     pattern = re.compile(
         r"""
-        (?:{0})         # gli attributi che ci interessano
-        \s*=\s*         # zero o più spazi prima e dopo l'uguale
+        (?:{0})         # gli attributi che ci interessano, presi dalla format
+        (?:\s*)         # zero o più spazi
+        (?:=\s*)?       # zero o più spazi dopo l'uguale (se c'è)
         (?:             # discrimino tra attributi quotati o meno
             (?:\"|')    # controllo quelli quotati
             (.*?)       # catturo tutto (lazy)
             (?:\"|')    # fino all'apice di chiusura
             |           # altrimenti l'attributo non è quotato
             (.*?)       # allora catturo tutto (lazy)
-            (?:\s|$)    # finché non trovo uno spazio o EOL
+            (?:\s|$|\)) # finché non trovo uno spazio o EOL o ")" (in css)
         )
         """.format("|".join(attr_list)),
         re.VERBOSE
     )
 
-    val = pattern.search(attr_str)
-    # val potrebbe essere None
-    if val is None:
-        return None
+    links = []
+    vals = pattern.findall(txt)
+    for val in vals:
+        if not val[0] and not val[1]:
+            continue
+        elif val[0]:
+            links.append(val[0])
+        else:
+            links.append(val[1])
 
-    if val.group(1) is None:
-        if val.group(2) is None:
-            return None
-        val = val.group(2)
-    else:
-        val = val.group(1)
-
-    if val.startswith("//"):
-        val = "https:{0}".format(val)
-    return val
+    return links
 
 
 def link_filter(link):
@@ -191,7 +184,7 @@ def link_filter(link):
     """
     if link is None:
         return False
-    if link.startswith("#"):
+    if link.startswith("#") or os.path.basename(link).startswith("#"):
         return False
     scheme = urlparse.urlparse(link).scheme
     if scheme not in FILTERING_SCHEMES:
@@ -266,8 +259,7 @@ def check_links(html, url):
     """
     subs = []
     downloads = []
-    found_tags = find_all_tags(html)
-    referenced_links = isolate_links(found_tags)
+    referenced_links = find_urls(html, [r"href", r"src", r"url\("])
     # Si possono avere almeno tre casi indesiderati a questo punto:
     # 1. scheme indesiderato (esempio android-app:// su wikipedia)
     # 2. link relativi alla pagina stessa (#qualcosa)
@@ -296,23 +288,34 @@ def check_links(html, url):
     for link in referenced_links:
         if not is_relative_link(link) and not can_be_relative(link, url):
             continue
-        if not is_relative_link(link) and can_be_relative(link, url):
+
+        if can_be_relative(link, url):
             rel = relative_link(link)
+
         if is_relative_link(link):
             rel = link
 
         if could_be_dir(rel):
             rel = os.path.join(rel, "index.html")
 
+        abs_url_ = abs_url(rel, url)
+        url_comps = urlparse.urlparse(url)
+        # Questo ciclo rimuove "../" da un link relativo fintanto che questo
+        # punta a una directory superiore rispetto alla root del sito.
+        while url_comps.netloc != urlparse.urlparse(abs_url_).netloc and rel:
+            rel = rel[3:]
+            abs_url_ = abs_url(rel, url)
+
         downloads.append(abs_url(rel, url))
 
-        urlpath = urlparse.urlparse(url).path
+        url_path = url_comps.path
         if rel != link:
-            if rel.lower() == urlpath.lower():
+            if rel.lower() == url_path.lower():
                 subs.append((link, "."))
             else:
-                pseudo_cwd = os.path.dirname(os.path.abspath(urlpath))
-                rel = os.path.relpath(rel, pseudo_cwd)
+                pseudo_cwd = os.path.dirname(os.path.abspath(url_path))
+                if not pseudo_cwd.startswith(os.sep):
+                    rel = os.path.relpath(rel, pseudo_cwd)
                 subs.append((link, rel))
     return subs, downloads
 
@@ -326,6 +329,8 @@ def substitute(html, subs):
     """
     for link, rel in subs:
         print "sostituisco", link, "con", rel
+        # FIXME: questa pattern non è corretta. Cercare di sostituire "../" con
+        # "../index.html" finisce per sostituire l'intero html
         pattern = re.compile(r"({0}\/?)(?=[\"'\s])".format(link.rstrip("/")))
         html = pattern.sub(rel, html)
     return html
