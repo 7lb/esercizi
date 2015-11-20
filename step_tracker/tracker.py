@@ -15,7 +15,7 @@ days = {}
 def add_day():
     if not request.json or not "steps" in request.json:
         return make_response(
-            jsonify({"message": "Bad Request: misisng step number"}), 400
+            jsonify({"message": "Bad Request: missing step number"}), 400
         )
 
     date = datetime.now().isoformat()[:10]
