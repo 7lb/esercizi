@@ -46,7 +46,7 @@ PUT /v1/days
 {
     "message": "OK",
     "day":  {
-                "date": "2010-10-20".
+                "date": "2010-10-20",
                 "steps": "100"
             },
     "uri": "http://localhost:5000/v1/days/2010-10-20"
