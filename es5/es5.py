@@ -1,4 +1,4 @@
-#! /usr/bin/python2
+#! /usr/bin/env python
 #-*- coding:utf-8 -*-
 
 """
@@ -329,9 +329,7 @@ def substitute(html, subs):
     """
     for link, rel in subs:
         print "sostituisco", link, "con", rel
-        # FIXME: questa pattern non è corretta. Cercare di sostituire "../" con
-        # "../index.html" finisce per sostituire l'intero html
-        pattern = re.compile(r"({0}\/?)(?=[\"'\s])".format(link.rstrip("/")))
+        pattern = re.compile(r"({0}\/?)(?=[\"'\s])".format(re.escape(link.rstrip("/"))))
         html = pattern.sub(rel, html)
     return html
 
