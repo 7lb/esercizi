@@ -1,6 +1,6 @@
 # Create
 ### Aggiunta passi per la data corrente
-POST /v1/days
+POST /v1/days  
 POST /v2/users/[user]/days
 ##### Parametri:
 * steps: numero di passi effettuati
@@ -21,7 +21,7 @@ POST /v2/users/[user]/days
 
 # Retrieve
 ### Recupero passi per una data arbitraria
-GET /v1/days/[data ISO 8601]
+GET /v1/days/[data ISO 8601]  
 GET /v2/users/[user]/days/[data ISO 8601]
 
 ##### Ritorna:
@@ -38,7 +38,7 @@ GET /v2/users/[user]/days/[data ISO 8601]
 
 # Update
 ### Modifica passi per la data corrente
-PUT /v1/days
+PUT /v1/days  
 PUT /v2/users/[user]/days
 ##### Parametri:
 * steps: numero di passi da aggiornare
@@ -58,7 +58,7 @@ PUT /v2/users/[user]/days
 
 # Delete
 ### Eliminazione passi per una data arbitraria
-DELETE /v1/days/[data ISO 8601]
+DELETE /v1/days/[data ISO 8601]  
 DELETE /v2/users/[user]/days/[data ISO 8601]
 
 ##### Ritorna:
