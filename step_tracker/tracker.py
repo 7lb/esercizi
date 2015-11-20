@@ -5,13 +5,37 @@
 
 from datetime import datetime
 from flask import Flask, jsonify, request, make_response, url_for
+from flask.ext.httpauth import HTTPBasicAuth
 app = Flask(__name__)
+auth = HTTPBasicAuth()
 
 # Backend
 days = {}
 
+users = {
+    "admin": "admin",
+}
+
+@auth.get_password
+def get_password(username):
+    password = users.get(username)
+    if password:
+        return password
+    return
+
+
+@auth.error_handler
+def unauthorized():
+    return make_response(
+        jsonify({
+            "message": "Unauthorized access"
+        }), 401
+    )
+
+
 # Aggiunta di un numero di passi per la giornata in corso
 @app.route("/v1/days", methods=["POST"])
+@auth.login_required
 def add_day():
     if not request.json or not "steps" in request.json:
         return make_response(
@@ -41,6 +65,7 @@ def add_day():
 
 # Modifica del numero di passi per la giornata in corso
 @app.route("/v1/days", methods=["PUT"])
+@auth.login_required
 def change_day():
     if not request.json or not "steps" in request.json:
         make_response(
@@ -73,6 +98,7 @@ def change_day():
 
 # Recupero del numero di passi per una data arbitraria
 @app.route("/v1/days/<date>", methods=["GET"])
+@auth.login_required
 def get_day(date):
     day = days.get(date)
     if not day:
@@ -92,6 +118,7 @@ def get_day(date):
 
 # Rimozione dei passi registrati per una data arbitraria
 @app.route("/v1/days/<date>", methods=["DELETE"])
+@auth.login_required
 def remove_day(date):
     day = days.get(date)
     if not day:
