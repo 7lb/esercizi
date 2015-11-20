@@ -30,10 +30,7 @@ def get_password(username):
 @auth.error_handler
 def unauthorized():
     return make_response(
-        jsonify({
-            "message": "Unauthorized access"
-        }), 401
-    )
+        jsonify({"message": "Unauthorized access"}), 401)
 
 
 @app.errorhandler(405)
@@ -61,8 +58,7 @@ def add_day(user=None):
 
     if not request.json or not "steps" in request.json:
         return make_response(
-            jsonify({"message": "Bad Request: missing step number"}), 400
-        )
+            jsonify({"message": "Bad Request: missing step number"}), 400)
 
     date = datetime.now().isoformat()[:10]
     day = {
@@ -72,8 +68,7 @@ def add_day(user=None):
 
     if day_present(day, collection):
         return make_response(
-            jsonify({"message": "Bad Request: item already present"}), 400
-        )
+            jsonify({"message": "Bad Request: item already present"}), 400)
 
     add(day, collection)
     response = {
@@ -98,8 +93,7 @@ def change_day(user=None):
 
     if not request.json or not "steps" in request.json:
         make_response(
-            jsonify({"message": "Bad Request: missing step number"}), 400
-        )
+            jsonify({"message": "Bad Request: missing step number"}), 400)
 
     date = datetime.now().isoformat()[:10]
     day = {
@@ -108,9 +102,7 @@ def change_day(user=None):
     }
 
     if not day_present(day, collection):
-        return make_response(
-            jsonify({"message": "Not Found"}), 404
-        )
+        return make_response(jsonify({"message": "Not Found"}), 404)
 
     # Siccome remove e add usano la data come chiave il seguente codice
     # funziona perché i corpi del giorno rimosso e aggiunto differiscono
@@ -139,10 +131,7 @@ def get_day(date, user=None):
     day = get_date(date, collection)
     if not day:
         return make_response(
-            jsonify({
-                "message": "Not Found"
-            }), 404
-        )
+            jsonify({"message": "Not Found"}), 404)
 
     return make_response(
         jsonify({
@@ -161,19 +150,10 @@ def remove_day(date, user=None):
 
     day = get_date(date, collection)
     if not day:
-        return make_response(
-            jsonify({
-                "message": "Not Found"
-            }), 404
-        )
+        return make_response(jsonify({"message": "Not Found"}), 404)
 
     remove(day, collection)
-    return make_response(
-        jsonify({
-            "message": "OK",
-            "day" : day
-        }), 200
-    )
+    return make_response(jsonify({"message": "OK", "day" : day}), 200)
 
 
 def day_present(day, collection):
