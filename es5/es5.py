@@ -6,6 +6,7 @@ Modulo per il download in locale di un sito remoto
 """
 
 import argparse
+import logging
 import os
 import re
 import requests
@@ -83,7 +84,6 @@ def download(url):
 
     # Se esiste significa che l'abbiamo già scaricato
     if os.path.exists(path):
-        print "skippo", url
         return
 
     # Creiamo le cartelle necessarie se non esistono
@@ -105,7 +105,8 @@ def download(url):
     # Si scaricano ricorsivamente tutti i file interessanti, bisogna però
     # riconvertire ogni path relativo in un url assoluto
     for down in downloads:
-        print "da", url, "scarico", down
+        print "scarico", down
+        logging.debug("down: {0} from {1}".format(down, url))
         download(down)
 
 
@@ -122,7 +123,7 @@ def validate(url):
     return False
 
 
-def find_urls(txt, attr_list):
+def find_urls(txt):
     """
     Isola i valori degli attributi passati come parametro
     """
@@ -148,30 +149,39 @@ def find_urls(txt, attr_list):
     #[2]: https://html.spec.whatwg.org/multipage/syntax.html#syntax-attribute-value
     pattern = re.compile(
         r"""
-        (?:{0})         # gli attributi che ci interessano, presi dalla format
-        (?:\s*)         # zero o più spazi
-        (?:=\s*)?       # zero o più spazi dopo l'uguale (se c'è)
-        (?:             # discrimino tra attributi quotati o meno
-            (?:\"|')    # controllo quelli quotati
-            (.*?)       # catturo tutto (lazy)
-            (?:\"|')    # fino all'apice di chiusura
-            |           # altrimenti l'attributo non è quotato
-            (.*?)       # allora catturo tutto (lazy)
-            (?:\s|$|\)) # finché non trovo uno spazio o EOL o ")" (in css)
+        (?:
+            (?:href|src)    # se HTML
+            \s*\=\s*        # l'= può essere circondato da qualsiasi # di spazi
+            (?:             # differenzio tra attributi quotati o meno
+                [\"']       # se sono quotati
+                (.*?)       # catturo tutto (lazy)
+                [\"']       # fino al quote di chiusura
+                |           # altrimenti
+                (.*?)       # catturo tutto (lazy)
+                [\s|$]      # fino a uno spazio o alla fine della stringa
+            )
+            |               # se CSS
+            url\(\s*        # qualsiasi spaziatura dopo "url("
+            (?:             # differenzio tra url quotati o meno
+                [\"']       # se sono quotati
+                (.*?)       # catturo tutto (lazy)
+                [\"']       # fino al quote di chiusura
+                |           # altrimenti
+                (.*?)       # catturo tutto (lazy)
+                [\)$]       # fino a una ")" o alla fine della stringa
+            )
         )
-        """.format("|".join(attr_list)),
+        """,
         re.VERBOSE
     )
 
     links = []
-    vals = pattern.findall(txt)
-    for val in vals:
-        if not val[0] and not val[1]:
-            continue
-        elif val[0]:
-            links.append(val[0])
-        else:
-            links.append(val[1])
+    groups = pattern.findall(txt)
+    for group in groups:
+        for match in group:
+            if match:
+                links.append(match)
+                continue
 
     return links
 
@@ -259,7 +269,7 @@ def check_links(html, url):
     """
     subs = []
     downloads = []
-    referenced_links = find_urls(html, [r"href", r"src", r"url\("])
+    referenced_links = find_urls(html)
     # Si possono avere almeno tre casi indesiderati a questo punto:
     # 1. scheme indesiderato (esempio android-app:// su wikipedia)
     # 2. link relativi alla pagina stessa (#qualcosa)
@@ -314,7 +324,10 @@ def check_links(html, url):
                 subs.append((link, "."))
             else:
                 pseudo_cwd = os.path.dirname(os.path.abspath(url_path))
-                if not pseudo_cwd.startswith(os.sep):
+                if pseudo_cwd.startswith(os.sep):
+                    tmp_path = os.path.relpath(".", pseudo_cwd[1:])
+                    rel = os.path.join(tmp_path, rel[1:])
+                else:
                     rel = os.path.relpath(rel, pseudo_cwd)
                 subs.append((link, rel))
     return subs, downloads
@@ -328,8 +341,9 @@ def substitute(html, subs):
     Ritorna il file html modificato
     """
     for link, rel in subs:
-        print "sostituisco", link, "con", rel
-        pattern = re.compile(r"({0}\/?)(?=[\"'\s])".format(re.escape(link.rstrip("/"))))
+        logging.debug("sub: {0} -> {1}".format(link, rel))
+        pattern = re.compile(r"({0}\/?)(?=[\"'\s])".format(
+            re.escape(link.rstrip("/"))))
         html = pattern.sub(rel, html)
     return html
 
@@ -351,4 +365,5 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("url", help="The url of the webpage to download")
     args = parser.parse_args()
+    logging.basicConfig(filename="logfile", level=logging.DEBUG)
     begin(args.url)
