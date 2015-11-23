@@ -324,11 +324,11 @@ def check_links(html, url):
                 subs.append((link, "."))
             else:
                 pseudo_cwd = os.path.dirname(os.path.abspath(url_path))
-                if pseudo_cwd.startswith(os.sep):
-                    tmp_path = os.path.relpath(".", pseudo_cwd[1:])
+                tmp_path = os.path.relpath(".", pseudo_cwd[1:])
+                if rel.startswith(os.sep):
                     rel = os.path.join(tmp_path, rel[1:])
-                else:
-                    rel = os.path.relpath(rel, pseudo_cwd)
+                elif not rel.startswith("."):
+                    rel = os.path.join(tmp_path, rel)
                 subs.append((link, rel))
     return subs, downloads
 
