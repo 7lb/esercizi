@@ -4,26 +4,56 @@
 # pylint: disable = missing-docstring, import-error, redefined-outer-name
 
 from datetime import datetime
-from flask import Flask, jsonify, request, make_response, url_for
+from flask import Flask, jsonify, request, make_response, url_for, g
 from flask.ext.httpauth import HTTPBasicAuth
+import sqlite3
 app = Flask(__name__)
 auth = HTTPBasicAuth()
+
+DBNAME = "users.db"
 
 # Backend
 collection = {}
 
-users = {
-    "admin": "admin",
-    "pippo": "pluto",
-    "foo": "bar",
-    "paolo": "i<3francesca",
-}
+def connect_db():
+    return sqlite3.connect(DBNAME)
+
+def init_db():
+    conn = connect_db()
+    with app.open_resource("schema.sql", "r") as fd:
+        conn.cursor().executescript(fd.read())
+    conn.commit()
+    conn.close()
+
+@app.before_request
+def before_request():
+    g.db = connect_db()
+
+@app.teardown_request
+def teardown_request(exception):
+    db = hasattr(g, "db", None)
+    if db is not None:
+        db.close()
+
+def dbg_pupulate_db():
+    query = """insert into users values
+    (
+        ("admin", "admin"),
+        ("pippo", "pluto"),
+        ("foo", "bar"),
+        ("paolo", "i<3francesca")
+    )"""
+    g.db.exectue(query)
+    g.db.commit()
 
 @auth.get_password
 def get_password(username):
-    password = users.get(username)
+    query = """select password from users
+    where username == ?
+    """
+    password = g.db.execute(query, username).fetchone()
     if password:
-        return password
+        return password[0]
     return
 
 
@@ -160,6 +190,7 @@ def day_present(day, collection):
     """
     Controlla se il giorno è presente nella collection
     """
+    #TODO: usare tabella sqlite
     days = collection.get(auth.username())
 
     if days is None:
@@ -172,6 +203,7 @@ def add(day, collection):
     """
     Aggiunge un giorno alla collection
     """
+    #TODO: usare tabella sqlite
     days = collection.get(auth.username())
 
     if days is None:
@@ -185,6 +217,7 @@ def remove(day, collection):
     """
     Rimuove un giorno dalla collection
     """
+    #TODO: usare tabella sqlite
     days = collection.get(auth.username())
 
     if days is None:
@@ -197,6 +230,7 @@ def get_date(date, collection):
     """
     Ritorna un giorno dalla collection
     """
+    #TODO: usare tabella sqlite
     days = collection.get(auth.username())
 
     if days is None:
@@ -206,4 +240,6 @@ def get_date(date, collection):
 
 
 if __name__ == "__main__":
+    init_db()
+    dbg_pupulate_db()
     app.run()
