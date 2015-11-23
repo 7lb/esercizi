@@ -194,8 +194,6 @@ def link_filter(link):
     """
     if link is None:
         return False
-    if link.startswith("#") or os.path.basename(link).startswith("#"):
-        return False
     scheme = urlparse.urlparse(link).scheme
     if scheme not in FILTERING_SCHEMES:
         return False
@@ -270,10 +268,9 @@ def check_links(html, url):
     subs = []
     downloads = []
     referenced_links = find_urls(html)
-    # Si possono avere almeno tre casi indesiderati a questo punto:
+    # Si possono avere almeno due casi indesiderati a questo punto:
     # 1. scheme indesiderato (esempio android-app:// su wikipedia)
-    # 2. link relativi alla pagina stessa (#qualcosa)
-    # 3. None, che si verifica quando un tag selezionato non ha attributi tra
+    # 2. None, che si verifica quando un tag selezionato non ha attributi tra
     #    quelli specificati
     # Si risolve filtrando la lista dei link
     referenced_links = filter(link_filter, referenced_links)
@@ -296,7 +293,11 @@ def check_links(html, url):
     # "https://en.wikipedia.org/w/api.php" lo si va a sotituire non con il link
     # relativo "/w/api.php" ma con il path relativo "../w/api.php"
     for link in referenced_links:
+        down = True
         if not is_relative_link(link) and not can_be_relative(link, url):
+            continue
+
+        if link == "#":
             continue
 
         if can_be_relative(link, url):
@@ -305,18 +306,29 @@ def check_links(html, url):
         if is_relative_link(link):
             rel = link
 
+        url_comps = urlparse.urlparse(url)
+        link_comps = urlparse.urlparse(link)
+        if link.startswith("#") or os.path.basename(link).startswith("#"):
+            if link.startswith("#"):
+                rel = os.path.dirname(url_comps.path)
+                rel = os.path.join(rel, "index.html")
+            else:
+                rel = os.path.join(link_comps.path, "index.html")
+            rel = "{0}#{1}".format(rel, link_comps.fragment)
+            down = False
+
         if could_be_dir(rel):
             rel = os.path.join(rel, "index.html")
 
         abs_url_ = abs_url(rel, url)
-        url_comps = urlparse.urlparse(url)
         # Questo ciclo rimuove "../" da un link relativo fintanto che questo
         # punta a una directory superiore rispetto alla root del sito.
         while url_comps.netloc != urlparse.urlparse(abs_url_).netloc and rel:
             rel = rel[3:]
             abs_url_ = abs_url(rel, url)
 
-        downloads.append(abs_url(rel, url))
+        if down:
+            downloads.append(abs_url_)
 
         url_path = url_comps.path
         if rel != link:
