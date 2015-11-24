@@ -1,5 +1,5 @@
-drop table if exists users
-drop table if exists days
+drop table if exists users;
+drop table if exists days;
 
 create table users (
     username text primary key,
@@ -7,9 +7,9 @@ create table users (
 );
 
 create table days (
-    id int primary key autoincrement,
-    date date not null,
-    nsteps int not null,
+    id integer primary key autoincrement,
+    date text not null,
+    nsteps integer not null,
     username text not null,
-    foreign key(username) refrences users(username)
+    foreign key(username) references users(username)
 );
