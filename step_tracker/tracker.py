@@ -12,52 +12,55 @@ auth = HTTPBasicAuth()
 
 DBNAME = "users.db"
 
-# Backend
-collection = {}
-
 def connect_db():
     return sqlite3.connect(DBNAME)
 
 def init_db():
     conn = connect_db()
-    with app.open_resource("schema.sql", "r") as fd:
+    with app.open_resource("/home/zero/esercizi/step_tracker/schema.sql", "r") as fd:
         conn.cursor().executescript(fd.read())
     conn.commit()
     conn.close()
 
 @app.before_request
 def before_request():
-    g.db = connect_db()
+    db = getattr(g, "db", None)
+    if db is None:
+        g.db = connect_db()
+    return db
 
 @app.teardown_request
 def teardown_request(exception):
-    db = hasattr(g, "db", None)
+    db = getattr(g, "db", None)
     if db is not None:
         db.close()
 
-def dbg_pupulate_db():
-    query = """insert into users values
-    (
-        ("admin", "admin"),
-        ("pippo", "pluto"),
-        ("foo", "bar"),
-        ("paolo", "i<3francesca")
-    )"""
-    g.db.exectue(query)
-    g.db.commit()
+def populate_db():
+    with app.app_context():
+        conn = connect_db()
+        query = "insert into users (username, password) values (?, ?);"
+        userpasses = [
+            ("admin", "admin"),
+            ("foo", "bar"),
+            ("pippo", "pluto")
+        ]
+        for elem in userpasses:
+            conn.execute(query, elem)
+        conn.commit()
 
 @auth.get_password
 def get_password(username):
     query = """select password from users
     where username == ?
     """
-    password = g.db.execute(query, username).fetchone()
+    password = g.db.execute(query, (username,)).fetchone()
     if password:
         return password[0]
     return
 
 
 @auth.error_handler
+@app.errorhandler(401)
 def unauthorized():
     return make_response(
         jsonify({"message": "Unauthorized access"}), 401)
@@ -75,16 +78,19 @@ def internal_server_error():
         jsonify({"message": "Internal server error"}), 500)
 
 
-def check_user(user):
-    if user != auth.username() and user is not None:
-        return unauthorized()
+def check_user(user, logged_in):
+    if user != logged_in and user is not None:
+        return False
+    return True
+
 
 # Aggiunta di un numero di passi per la giornata in corso
 @app.route("/v1/days", methods=["POST"])
 @app.route("/v2/users/<user>/days", methods=["POST"])
 @auth.login_required
 def add_day(user=None):
-    check_user(user)
+    if not check_user(user, auth.username()):
+        return unauthorized()
 
     if not request.json or not "steps" in request.json:
         return make_response(
@@ -96,11 +102,11 @@ def add_day(user=None):
         "steps": request.json["steps"]
     }
 
-    if day_present(day, collection):
+    if day_present(day):
         return make_response(
             jsonify({"message": "Bad Request: item already present"}), 400)
 
-    add(day, collection)
+    add(day)
     response = {
         "message": "Created",
         "day": day,
@@ -119,7 +125,8 @@ def add_day(user=None):
 @app.route("/v2/users/<user>/days", methods=["PUT"])
 @auth.login_required
 def change_day(user=None):
-    check_user(user)
+    if not check_user(user, auth.username()):
+        return unauthorized()
 
     if not request.json or not "steps" in request.json:
         make_response(
@@ -131,13 +138,13 @@ def change_day(user=None):
         "steps": request.json["steps"]
     }
 
-    if not day_present(day, collection):
+    if not day_present(day):
         return make_response(jsonify({"message": "Not Found"}), 404)
 
     # Siccome remove e add usano la data come chiave il seguente codice
     # funziona perché i corpi del giorno rimosso e aggiunto differiscono
-    remove(day, collection)
-    add(day, collection)
+    remove(day)
+    add(day)
     response = {
         "message": "OK",
         "day": day,
@@ -156,9 +163,10 @@ def change_day(user=None):
 @app.route("/v2/users/<user>/days/<date>", methods=["GET"])
 @auth.login_required
 def get_day(date, user=None):
-    check_user(user)
+    if not check_user(user, auth.username()):
+        return unauthorized()
 
-    day = get_date(date, collection)
+    day = get_date(date)
     if not day:
         return make_response(
             jsonify({"message": "Not Found"}), 404)
@@ -176,70 +184,58 @@ def get_day(date, user=None):
 @app.route("/v2/users/<user>/days/<date>", methods=["DELETE"])
 @auth.login_required
 def remove_day(date, user=None):
-    check_user(user)
+    if not check_user(user, auth.username()):
+        return unauthorized()
 
-    day = get_date(date, collection)
+    day = get_date(date)
     if not day:
         return make_response(jsonify({"message": "Not Found"}), 404)
 
-    remove(day, collection)
+    remove(day)
     return make_response(jsonify({"message": "OK", "day" : day}), 200)
 
 
-def day_present(day, collection):
+def day_present(day):
     """
-    Controlla se il giorno è presente nella collection
+    Controlla se il giorno è presente nel database
     """
-    #TODO: usare tabella sqlite
-    days = collection.get(auth.username())
-
-    if days is None:
-        return None
-
-    return days.get(day["date"])
+    query = """select * from users, days
+    where days.username == ? and days.date ==?"""
+    return g.db.execute(query, (auth.username(), day["date"])).fetchone()
 
 
-def add(day, collection):
+def add(day):
     """
-    Aggiunge un giorno alla collection
+    Aggiunge un giorno al database
     """
-    #TODO: usare tabella sqlite
-    days = collection.get(auth.username())
+    try:
+        g.db.execute(
+            "insert into days (date, nsteps, username) values (?, ?, ?);",
+            (day["date"], day["steps"], auth.username()))
+    except sqlite3.IntegrityError:
+        return
+    g.db.commit()
 
-    if days is None:
-        days = {}
 
-    days[day["date"]] = day
-    collection[auth.username()] = days
-
-
-def remove(day, collection):
+def remove(day):
     """
-    Rimuove un giorno dalla collection
+    Rimuove un giorno dal database
     """
-    #TODO: usare tabella sqlite
-    days = collection.get(auth.username())
-
-    if days is None:
-        return None
-
-    return days.pop(day["date"], None)
+    g.db.execute("delete from days where date == ? and username == ?",
+            (day["date"], auth.username()))
+    g.db.commit()
 
 
-def get_date(date, collection):
+def get_date(date):
     """
-    Ritorna un giorno dalla collection
+    Ritorna un giorno dal database
     """
-    #TODO: usare tabella sqlite
-    days = collection.get(auth.username())
-
-    if days is None:
-        return None
-
-    return days.get(date)
+    return g.db.execute("""select date, nsteps from days
+                     where date == ? and username ==?""",
+                     (date, auth.username())).fetchone()
 
 
 if __name__ == "__main__":
     init_db()
-    dbg_pupulate_db()
+    populate_db()
     app.run()
